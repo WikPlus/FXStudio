@@ -45,7 +45,7 @@ grep -q '^ENABLE_MPEG:BOOL=ON' "$work/build/sndfile/CMakeCache.txt"
 mkdir -p "$work/build/ffmpeg"
 cd "$work/build/ffmpeg"
 "$work/source/ffmpeg-8.0.1/configure" --target-os=mingw32 --arch=x86_64 \
-  --std=c17 \
+  --stdc=c17 \
   --disable-autodetect --disable-gpl --disable-nonfree --disable-everything \
   --disable-doc --disable-debug --disable-network --disable-x86asm --disable-avdevice \
   --disable-ffplay --disable-ffprobe --enable-ffmpeg --enable-w32threads --enable-swresample \
