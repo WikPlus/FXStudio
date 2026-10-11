@@ -81,7 +81,7 @@ def collect(app, resources, electron, python_site, platform, exporter=None, nati
         if len(python_texts) < 15:
             raise ValueError('Missing CPython and embedded native-library license texts.')
         component('CPython and embedded native libraries', '3.11.11', 'PSF and upstream library licenses',
-                  [str(p.relative_to(folder)) for p in sorted(python_texts)],
+                  [p.relative_to(folder).as_posix() for p in sorted(python_texts)],
                   'https://github.com/astral-sh/python-build-standalone ; original release metadata in software/python-3.11.11/PROVENANCE.json')
         component('OpenSSL in cryptography', '4.0.3', 'Apache-2.0', ['software/native/openssl-4.0.3/LICENSE.txt'],
                   'https://github.com/openssl/openssl/tree/openssl-4.0.3')
@@ -115,7 +115,7 @@ def collect(app, resources, electron, python_site, platform, exporter=None, nati
                 files.append(copy(distribution.locate_file(entry), Path('software/python-packages') / stem / relative))
         if not files and name.lower() == 'sentencepiece':
             seed = folder / ('software/sentencepiece-' + version)
-            files = [str(p.relative_to(folder)) for p in sorted(seed.rglob('*')) if p.is_file() and license_file(p)]
+            files = [p.relative_to(folder).as_posix() for p in sorted(seed.rglob('*')) if p.is_file() and license_file(p)]
         if not files and platform == 'win32':
             match = next((c for c in native['components'] if c['name'].lower() == name.lower() and c['version'] == version), None)
             if match:
@@ -157,7 +157,7 @@ def collect(app, resources, electron, python_site, platform, exporter=None, nati
         for name, version, license in [('FFmpeg', '8.0.1', 'LGPL-2.1-or-later'), ('LAME', '3.100', 'LGPL-2.0-or-later'),
                                       ('libsndfile and linked audio codecs', '1.2.2', 'LGPL and supplied codec licenses')]:
             prefix = 'software/native/' + name.split()[0].lower()
-            files = [str(p.relative_to(folder)) for p in sorted((folder / prefix).rglob('*')) if p.is_file() and license_file(p)]
+            files = [p.relative_to(folder).as_posix() for p in sorted((folder / prefix).rglob('*')) if p.is_file() and license_file(p)]
             component(name, version, license, files, 'Corresponding source archives and build instructions are included in sources/.')
         shutil.copy2(ROOT / 'packaging/macos-sources.json', folder / 'sources/source-manifest.json')
     else:
@@ -180,7 +180,7 @@ def collect(app, resources, electron, python_site, platform, exporter=None, nati
     (folder / 'README.md').write_text('\n'.join(rows))
     copy(ROOT / 'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md')
     manifest = {'schema': 1, 'platform': platform, 'components': components,
-                'files': [{'path': str(p.relative_to(folder)), 'sha256': sha256(p)} for p in sorted(folder.rglob('*')) if p.is_file() and p.name != 'inventory.json']}
+                'files': [{'path': p.relative_to(folder).as_posix(), 'sha256': sha256(p)} for p in sorted(folder.rglob('*')) if p.is_file() and p.name != 'inventory.json']}
     (folder / 'inventory.json').write_text(json.dumps(manifest, indent=2) + '\n')
     validate_license_bundle(folder)
     # Keep the usual Resources entry easy to find without another duplicate.
