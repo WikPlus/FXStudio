@@ -637,16 +637,18 @@ class Studio:
                 with self.lock:
                     if self.setup_process is process:
                         self.setup_process = None
-                    if self.setup_cancelled and self.setup_state['state'] == 'cancelling':
-                        self.setup_state = {'state': 'paused', 'model': model_id,
-                                            'message': 'Model download paused. Select Resume download to continue.'}
-                        self.remember_setup()
+                        if self.setup_cancelled and self.setup_state['state'] == 'cancelling':
+                            self.setup_state = {'state': 'paused', 'model': model_id,
+                                                'message': 'Model download paused. Select Resume download to continue.'}
+                            self.remember_setup()
         self.setup_thread = threading.Thread(target=download, daemon=True)
         self.setup_thread.start()
         return self.setup_state.copy()
 
     def close(self):
         with self.lock:
+            if self.closed:
+                return
             self.closed = True
             setup_process = self.setup_process
             for process in (self.process, self.setup_process):
@@ -655,11 +657,15 @@ class Studio:
             self.db.execute("UPDATE jobs SET cancelled=1 WHERE state IN ('queued','running','cancelling')")
             self.db.commit()
         self.wake.set()
-        self.thread.join(timeout=5)
+        # Keep the connection valid until its writers finish, then release the
+        # actual SQLite handle. Windows cannot remove/reopen a still-held file.
+        self.thread.join()
         if setup_process:
             try:
                 setup_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
         if self.setup_thread:
-            self.setup_thread.join(timeout=5)
+            self.setup_thread.join()
+        with self.lock:
+            self.db.close()

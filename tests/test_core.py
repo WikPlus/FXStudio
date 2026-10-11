@@ -1,4 +1,4 @@
-import json, os, signal, subprocess, sys, tempfile, time, unittest
+import json, os, signal, sqlite3, subprocess, sys, tempfile, time, unittest
 from unittest.mock import patch
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
@@ -51,6 +51,11 @@ class CoreTests(unittest.TestCase):
   while self.studio.process is None and time.monotonic()<end:time.sleep(.01)
   pid=self.studio.process.pid;self.studio.close()
   self.assertFalse(process_running(pid))
+  with self.assertRaises(sqlite3.ProgrammingError):self.studio.db.execute('SELECT 1')
+  self.studio.close()
+  database=Path(self.temp.name)/'studio.sqlite';moved=database.with_name('closed.sqlite')
+  database.rename(moved);moved.rename(database)
+  self.studio=Studio(data_dir=self.temp.name,command_factory=fixture)
   self.assertEqual(wait(self.studio,job)['state'],'cancelled')
  def test_interrupted_jobs_and_input_preserved(self):
   self.studio.execute("INSERT INTO jobs(id,settings,state,created) VALUES(?,?,?,?)",('012345678901',json.dumps({'prompt':'saved'}),'running',time.time()))

@@ -1,6 +1,7 @@
 """Persistent projects, real generation associations and nondestructive reuse."""
 import json
 import sqlite3
+from contextlib import closing
 import tempfile
 import time
 import unittest
@@ -135,7 +136,7 @@ class ProjectTests(unittest.TestCase):
         self.studio.favorite(item['id'], True)
         self.studio.set_trim(item['id'], {'start': .1, 'end': .3})
         self.studio.close()
-        with sqlite3.connect(self.studio.data / 'studio.sqlite') as db:
+        with closing(sqlite3.connect(self.studio.data / 'studio.sqlite')) as db:
             db.executescript('DROP TABLE project_sounds; DROP TABLE projects;')
         self.studio = Studio(self.temp.name, command_factory=fixture)
         self.assertEqual(self.studio.projects(), [])

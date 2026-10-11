@@ -77,8 +77,12 @@ class SetupLifecycleTests(unittest.TestCase):
             def __iter__(self):return iter(self.stream)
             def close(self):closing.set();release.wait(6);self.stream.close()
         def launch(*args,**kwargs):
-            process=original(*args,**kwargs);calls.append(process)
-            if len(calls)==1:process.stdout=DelayedClose(process.stdout)
+            process=original(*args,**kwargs)
+            # Windows cancellation also launches taskkill through Popen. Only
+            # count downloader processes in this download-resume regression.
+            if str(ROOT/'tests/fixture_downloader.py') in args[0]:
+                calls.append(process)
+                if len(calls)==1:process.stdout=DelayedClose(process.stdout)
             return process
         with patch('core.subprocess.Popen',side_effect=launch):
             studio=self.studio('slow');until(lambda:studio.setup_process is not None)

@@ -59,6 +59,7 @@ class LibraryConfigurationTests(unittest.TestCase):
                 self.assertEqual(runtime_paths.library_folder(data), data / 'override')
 
     def test_invalid_relative_config_uses_portable_default(self):
-        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {}, clear=True):
+        home_environment = {name: os.environ[name] for name in ('USERPROFILE', 'HOMEDRIVE', 'HOMEPATH') if name in os.environ}
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, home_environment, clear=True):
             (Path(temp) / 'library-root.txt').write_text('../../personal')
             self.assertEqual(runtime_paths.library_folder(temp), Path.home() / 'Music/FX Studio Library')
