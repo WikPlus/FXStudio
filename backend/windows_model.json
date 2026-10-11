@@ -1,0 +1,30 @@
+{
+  "repo": "stabilityai/stable-audio-3-optimized",
+  "revision": "08b17423649b5714b22eab20f96bf00751f2358a",
+  "files": [
+    {
+      "name": "sa3-m/dit_w8a8.tflite",
+      "remote": "tflite/sa3-m/dit_w8a8.tflite",
+      "size": 1667708664,
+      "sha256": "e60ea3a8b530de93ee7f1fd7b4426597006dbcde7bce45750d39c439f4ef9602"
+    },
+    {
+      "name": "same-l/dec_w8a8.tflite",
+      "remote": "tflite/same-l/dec_w8a8.tflite",
+      "size": 515381432,
+      "sha256": "53dbca41ec9620257834bda4f3008a2cd5072afba564b84906f8ffdfca2647e7"
+    },
+    {
+      "name": "same-l/enc_w8a8.tflite",
+      "remote": "tflite/same-l/enc_w8a8.tflite",
+      "size": 466762056,
+      "sha256": "9c76149a2fe6bd461fadf2a45b675fcd4bc64a26bd2f1d24810098a169cc41ec"
+    },
+    {
+      "name": "t5gemma/encoder_fp16.tflite",
+      "remote": "tflite/t5gemma/encoder_fp16.tflite",
+      "size": 563818608,
+      "sha256": "8530d0b3e6b9b9dcf1239145c2a853fb749708eaddbb472ff8f0802b50059372"
+    }
+  ]
+}

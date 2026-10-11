@@ -1,0 +1,81 @@
+{
+  "revision": "af60ef53ff9b2074719ee23d89c44aa433d0c55b",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "16bd922f0deee6f11a76f5582258fdc3abdf67c6b8719dbcafbc34dee31979a6"
+    },
+    {
+      "path": "optimized/tflite/README.md",
+      "sha256": "a5cde8d37f43d48f636d97717677becc4b0262c6f96acacaeaa989756af60a90"
+    },
+    {
+      "path": "optimized/tflite/models/defs/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "optimized/tflite/models/defs/tflite_pipeline.py",
+      "sha256": "229f34424d8ace818e416a8a3e50b92b859a074af44f4d5ed29eddc845b30e64"
+    },
+    {
+      "path": "optimized/tflite/models/tokenizer.model",
+      "sha256": "61a7b147390c64585d6c3543dd6fc636906c9af3865a5548f27f31aee1d4c8e2"
+    },
+    {
+      "path": "optimized/tflite/requirements.txt",
+      "sha256": "4f0a6bdfde92238996b6bd09bc067d3ae777dced99872ce16fe26b028aa85244"
+    },
+    {
+      "path": "optimized/tflite/scripts/examples.py",
+      "sha256": "9a8d376357b3fcf5c79c38f43bbf5e565999f09c8b08bccd4b7d3a2979b6479d"
+    },
+    {
+      "path": "optimized/tflite/scripts/install.py",
+      "sha256": "86a2421ed034d4aa21e16e291741ae5cabd200fb84512f0706c7b94604c40fad"
+    },
+    {
+      "path": "optimized/tflite/scripts/lora_core.py",
+      "sha256": "7c27fbb6231517cd16c87cb07ba9ae3f1cbc6838e47093a840894380bcb88104"
+    },
+    {
+      "path": "optimized/tflite/scripts/lora_patch.py",
+      "sha256": "e302943921a7fa84681a96df68e4930ecd62477018c029aee03e1f7698ab688c"
+    },
+    {
+      "path": "optimized/tflite/scripts/rung_decoder.py",
+      "sha256": "c2e82c53e3189e0fc3a1f948c19d84b5016e90e9eddac6e27c9e2daa20c612e7"
+    },
+    {
+      "path": "optimized/tflite/scripts/rung_dit.py",
+      "sha256": "229531d9a6298094427def0aa2715814c0324ba0bde819cd77f7f8797168f061"
+    },
+    {
+      "path": "optimized/tflite/scripts/rung_encoder.py",
+      "sha256": "cbfa3ca9693f67fa3216f5d8143db82e7b963d54eeac0e99b2ebfb1d8570419a"
+    },
+    {
+      "path": "optimized/tflite/scripts/sa3_gradio.py",
+      "sha256": "ce7dcde67e1092a1ae1db0a270a4d3258169e6099cd2cf7e4d904bcd909434c8"
+    },
+    {
+      "path": "optimized/tflite/scripts/sa3_tflite.py",
+      "sha256": "6e7a993346d17740d6a43c9d9a061b0bc30ad37eed4a191e5fe16fdcdeb8b0e7"
+    },
+    {
+      "path": "optimized/tflite/scripts/spec.py",
+      "sha256": "3e85ee7850a4e3861733823c1c712a123550c48c1cbd47cbb0e0baea2f31b42d"
+    },
+    {
+      "path": "optimized/tflite/scripts/test_lora_patch.py",
+      "sha256": "f36de7afd8a19f7b48db5f1f5526c4b729d6dff294d7ed9ce7d5bb965204ac40"
+    },
+    {
+      "path": "optimized/tflite/scripts/test_windows_compat.py",
+      "sha256": "fc21b66730650ea476f26e61688e17aeaeff8ea293a9c5a3ffcc83a6820b7495"
+    },
+    {
+      "path": "optimized/tflite/scripts/weights.py",
+      "sha256": "24c783e2fc06aa34285120ad98eebd9ccb2ecce9f39ca776ca55eb028c772e33"
+    }
+  ]
+}

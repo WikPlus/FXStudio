@@ -1,0 +1,20 @@
+FX Studio
+Copyright (c) 2026 WikPlus and FX Studio contributors
+
+FX Studio's original application code, documentation and agent skill are
+licensed under the MIT License in LICENSE. Third-party code, runtimes,
+libraries and model materials retain their own licenses. The app's MIT
+License does not relicense those materials or generated sound assets.
+
+Powered by Stability AI
+This Stability AI Model is licensed under the Stability AI Community License,
+Copyright © Stability AI Ltd. All Rights Reserved
+Gemma is provided under and subject to the Gemma Terms of Use found at
+https://ai.google.dev/gemma/terms
+
+Model license texts and notices: ui/licenses/models/.
+Bundled software license texts and corresponding-source information:
+THIRD_PARTY_NOTICES.md and the app's Third-party notices directory.
+
+The app name and WIK+DEV branding do not grant endorsement or trademark rights.
+The user's external sound library and private generated media are not bundled.

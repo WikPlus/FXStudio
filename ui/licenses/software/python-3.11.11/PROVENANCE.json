@@ -1,0 +1,8 @@
+{
+  "version": "3.11.11",
+  "release": "20250317",
+  "target": "aarch64-apple-darwin",
+  "source": "https://github.com/astral-sh/python-build-standalone/releases/tag/20250317",
+  "archive_sha256": "8709617529e3de5b985fa7ad191426f7647679116ede8e1676e1a1ea15482905",
+  "license_texts": "Original python/licenses directory from that release. Installed uv runtime is the stripped install-only edition."
+}

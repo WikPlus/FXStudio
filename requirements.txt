@@ -1,0 +1,6 @@
+mlx==0.32.3
+numpy==2.4.6
+sentencepiece==0.2.2
+huggingface_hub==2.1.1
+soundfile==0.14.0
+mcp==2.3.0

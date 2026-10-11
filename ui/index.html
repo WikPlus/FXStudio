@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FX Studio</title><link rel="stylesheet" href="/styles.css"><script defer src="/app.js"></script></head>
+<body>
+<div class="titlebar"><span>FX Studio</span><div class="titlebar-right"><span class="local-label">Local on your Mac</span><button type="button" id="buy-coffee" class="coffee-button" data-link="https://buymeacoffee.com/wikplus" title="Support WIK+DEV · Opens in your browser"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="coffee-cup" d="M5 9h12l-1 10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"/><path d="M17 10h1a3 3 0 0 1 0 6h-1M8 6C5 4 9 3 8 1m5 5c-3-2 1-3 0-5"/></svg><span>Buy me a coffee</span></button></div></div>
+<div class="app-shell">
+<aside class="sidebar">
+<div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 13v6m5-12v18m5-21v24m5-17v10m5-14v18m5-12v6"/></svg><span>FX Studio</span></div>
+<nav aria-label="Workspaces">
+<button data-view="generate" class="nav-button active">Generate sound</button>
+<button data-view="projects" class="nav-button">Projects</button>
+<button data-view="history" class="nav-button">History</button>
+<button data-view="favorites" class="nav-button">Favorites</button>
+<button data-view="library" class="nav-button">Sound library</button>
+</nav>
+<div class="sidebar-bottom"><button type="button" id="copy-agent-skill" class="nav-button agent-skill-button" title="Copy the English app guide and prompt examples for your agent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span id="agent-skill-label" aria-live="polite">Copy agent skill</span></button><p><span id="sidebar-family">Stable Audio 3</span><br><span id="sidebar-model">Medium · MLX</span></p><button data-view="setup" class="nav-button">Setup</button>
+<nav class="profile-links" aria-label="Creator profiles">
+<button type="button" class="profile-link" data-link="https://x.com/wik_plus" aria-label="X / Twitter profile: @wik_plus" title="@wik_plus on X / Twitter · Opens in your browser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l10 16h-4zM19 4 5 20"/></svg></button>
+<button type="button" class="profile-link" data-link="https://github.com/WikPlus" aria-label="GitHub profile: WikPlus" title="WikPlus on GitHub · Opens in your browser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></button>
+<button type="button" class="creator-logo-link" data-link="https://wikplus.dev/" aria-label="WIK+DEV website" title="WIK+DEV · Opens wikplus.dev in your browser"><svg class="creator-logo" viewBox="85 150 1990 365" aria-hidden="true"><image href="/assets/wik-dev.png" width="2169" height="725"/></svg></button>
+</nav></div>
+</aside>
+<main id="main">
+<header class="page-header"><div><h1 id="page-title">Generate sound</h1><p id="page-subtitle">Describe, generate, listen.</p></div><button id="model-badge" class="model-badge" data-view="setup">Checking model …</button></header>
+<section id="model-download" class="notice model-download" role="status" aria-live="polite" hidden><div class="download-row"><div><p id="download-title" class="download-title"></p><p id="download-message"></p></div><button type="button" id="download-action"></button></div><div id="download-progress" class="job-progress indeterminate" role="progressbar" aria-label="Model download"><span></span></div><p class="download-licenses">Model files download from Hugging Face. Generation stays local. <button type="button" data-view="setup">Models &amp; licenses</button></p></section>
+<div id="notice" class="notice" role="status" hidden></div>
+<section id="generator">
+<form id="generate-form">
+<div class="generation-project"><label>Project<select id="project_id"><option value="">No project</option></select></label><button type="button" id="create-generation-project">New project</button></div>
+<div class="parameter-row model-workflow"><label>Model<select id="model"><option value="medium">Stable Audio 3 Medium</option></select></label><label>Workflow<select id="mode"><option value="text">New sound</option><option value="variation">Reference variation</option><option value="inpaint">Edit a section</option></select></label></div>
+<div id="reference-panel" hidden><p id="reference-title">Choose a sound from History or the library using “Use as reference”.</p><div class="reference-actions"><button id="choose-reference" type="button">Choose reference</button><button id="play-reference" type="button" hidden>Play reference</button></div><p id="reference-license" class="field-hint"></p><div class="parameter-row"><label>Variation strength <input id="strength" type="number" min="0.1" max="1" step="0.05" value="0.65" required></label><p class="field-hint">0.1 stays close to the reference. 1 makes a larger change.</p></div><div id="inpaint-fields" class="parameter-row" hidden><label>Section start <div class="unit-field"><input id="start" type="number" min="0" step="any" value="0" required><span>seconds</span></div></label><label>Section end <div class="unit-field"><input id="end" type="number" min="0.1" step="any" value="2" required><span>seconds</span></div></label></div><p id="inpaint-note" class="field-hint" hidden>Editing may cause small sound changes outside the selected section.</p></div>
+<label class="description-label" for="prompt">What should your sound be like?</label>
+<textarea id="prompt" name="prompt" maxlength="2000" required rows="4" placeholder="For example: a camera shutter firing once, with a sharp mechanical snap. Close-miked in a dead room, with a very fast decay."></textarea>
+<div class="prompt-help"><span>Describe the source, action and recording character in English.</span><span id="character-count">0 / 2,000</span></div>
+<div class="examples" aria-label="Examples">
+<span>Examples</span>
+<button type="button" data-example="camera">Camera shutter</button>
+<button type="button" data-example="click">UI click</button>
+<button type="button" data-example="knob">Wooden knob</button>
+<button type="button" data-example="pop">Soft pop</button>
+<button type="button" data-example="swish">Air swish</button>
+<button type="button" data-example="whoosh">Transition</button>
+<button type="button" data-example="impact">Soft impact</button>
+<button type="button" data-example="paper">Page turn</button>
+<button type="button" data-example="drawer">Drawer shut</button>
+<button type="button" data-example="boost">Game boost</button>
+<button type="button" data-example="rain">Rain</button>
+<button type="button" data-example="cave">Dark cave</button>
+</div>
+<div class="parameter-row">
+<label>Duration <div class="unit-field"><input id="seconds" type="number" value="3" min="0.5" max="30" step="any" required><span>seconds</span></div></label>
+<label>Variants <select id="variants"><option value="1">1 sound</option><option value="2">2 sounds</option><option value="3">3 sounds</option><option value="4">4 sounds</option></select></label>
+</div>
+<details id="advanced"><summary>Advanced settings</summary><div class="advanced-grid">
+<label>Seed <input id="seed" type="number" min="0" max="2147483644" step="1" placeholder="Random"></label>
+<label>Sampling steps <input id="steps" type="number" value="8" min="1" max="16" step="1" required></label>
+<label>Prompt strength (CFG) <input id="cfg" type="number" value="1" min="0" max="10" step="0.1" required></label>
+<label class="negative-label">Negative prompt <input id="negative_prompt" maxlength="2000" placeholder="For example: music, voices" disabled></label>
+</div><p id="sampling-help" class="field-hint">The model defaults are 8 steps and CFG 1. The negative prompt applies when CFG differs from 1. Keep the same seed to compare settings.</p></details>
+<div class="generate-action"><p id="generate-hint">Sounds are generated one at a time.</p><button id="generate-button" class="primary" type="submit">Generate sound</button></div>
+</form>
+</section>
+<section id="projects" hidden>
+<div class="project-toolbar"><label>Project<select id="project-picker"><option value="">Choose a project</option></select></label><button type="button" id="new-project">New project</button></div>
+<form id="project-form" hidden><h2 id="project-form-title">New project</h2><label>Project name<input id="project-name" maxlength="80" required placeholder="For example: My game"></label><label>Description <span class="optional">(optional)</span><textarea id="project-description" maxlength="1000" rows="2" placeholder="What is this project for?"></textarea></label><div class="project-form-actions"><button class="primary" type="submit" id="save-project">Create project</button><button type="button" id="cancel-project-form">Cancel</button></div></form>
+<div id="project-detail" hidden><div class="project-heading"><div><h2 id="project-title"></h2><p id="project-description-text"></p><p id="project-count" class="field-hint" aria-live="polite"></p></div><button type="button" id="edit-project">Edit project</button></div><div class="project-review"><button type="button" id="generate-in-project" class="primary">Generate for this project</button><span class="spacer"></span><button type="button" id="previous-sound" disabled>Previous sound</button><button type="button" id="next-sound" disabled>Next sound</button></div><p class="field-hint">Listen with each sound’s play button or use Previous / Next sound. Trims and favorites are shared across projects.</p></div>
+</section>
+<section id="queue-section" hidden><h2>Jobs</h2><div id="queue"></div></section>
+<section id="setup" hidden></section>
+<section id="media-section">
+<div class="section-heading"><h2 id="results-title">Your sounds</h2><span id="results-count"></span></div>
+<div id="search-toolbar" hidden><label class="search-field"><span class="sr-only">Search sounds</span><input id="search" type="search" placeholder="Search sounds …"></label><label><span class="sr-only">Category</span><select id="category" hidden><option value="">All categories</option></select></label></div>
+<div id="media-list" aria-label="Sounds"></div><button id="more" hidden>Show more sounds</button>
+</section>
+</main>
+</div>
+<audio id="audio" preload="metadata"></audio>
+</body></html>

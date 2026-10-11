@@ -1,0 +1,19 @@
+{
+  "name": "fx-studio",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Local sound design with Stable Audio 3 Medium",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "zsh ./Starten.command",
+    "build": ".venv/bin/python scripts/build_app.py",
+    "package:mac": ".venv/bin/python scripts/package_macos.py",
+    "prepare:release": ".venv/bin/python scripts/prepare_release_sources.py && .venv/bin/python scripts/prepare_audio_exporter.py",
+    "test": ".venv/bin/python scripts/run_behavior_tests.py",
+    "check": "node --check ui/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.5.1"
+  }
+}
