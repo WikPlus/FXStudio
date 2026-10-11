@@ -7,7 +7,9 @@ work=$(cygpath -u "$1")
 prefix="$work/prefix"
 jobs=${NUMBER_OF_PROCESSORS:-4}
 mkdir -p "$prefix" "$work/build"
-export CFLAGS='-O2'
+# These original releases predate GCC's C23 default. Keep their documented
+# pre-C23 function declaration semantics without changing upstream sources.
+export CFLAGS='-O2 -std=gnu11'
 export CXXFLAGS='-O2'
 export LDFLAGS='-static-libgcc'
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
@@ -30,6 +32,7 @@ build_autoconf lame-3.100 --disable-frontend
 
 cmake -S libsndfile-1.2.2 -B "$work/build/sndfile" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_C_STANDARD=11 \
   -DCMAKE_SHARED_LINKER_FLAGS=-static-libgcc \
   -DBUILD_SHARED_LIBS=ON -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF \
   -DBUILD_TESTING=OFF -DBUILD_REGTEST=OFF -DENABLE_EXTERNAL_LIBS=ON -DENABLE_MPEG=ON
@@ -42,6 +45,7 @@ grep -q '^ENABLE_MPEG:BOOL=ON' "$work/build/sndfile/CMakeCache.txt"
 mkdir -p "$work/build/ffmpeg"
 cd "$work/build/ffmpeg"
 "$work/source/ffmpeg-8.0.1/configure" --target-os=mingw32 --arch=x86_64 \
+  --std=c17 \
   --disable-autodetect --disable-gpl --disable-nonfree --disable-everything \
   --disable-doc --disable-debug --disable-network --disable-x86asm --disable-avdevice \
   --disable-ffplay --disable-ffprobe --enable-ffmpeg --enable-w32threads --enable-swresample \
