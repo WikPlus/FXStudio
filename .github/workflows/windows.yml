@@ -1,0 +1,83 @@
+name: Windows build and tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_model_test:
+        description: 'Explicitly allow a temporary real Medium CPU generation on this Windows runner (about 3 GiB download)'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      DO_NOT_TRACK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+      - name: Build native software, verify licenses, test and package
+        shell: pwsh
+        run: ./Build-Windows.ps1
+      - name: Require both portable app and tested installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path 'dist/FXStudio-Windows-x64-Setup.exe')) { throw 'Inno Setup was unavailable; installer acceptance is required.' }
+          if (-not (Test-Path '.runtime/windows-installer-acceptance.json')) { throw 'Installer was not tested.' }
+      - name: Real Medium generation (explicit opt-in only)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_model_test
+        shell: pwsh
+        run: |
+          & .venv/Scripts/python.exe scripts/verify_windows.py --generate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Save native acceptance reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Windows-test-reports
+          path: |
+            .runtime/windows-*-acceptance.json
+            .runtime/behavior-tests.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Save tested Windows downloads
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: FXStudio-Windows-x64
+          path: |
+            dist/FXStudio-Windows-x64.zip
+            dist/FXStudio-Windows-x64.zip.sha256
+            dist/FXStudio-Windows-x64-Setup.exe
+            dist/FXStudio-Windows-x64-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
