@@ -35,6 +35,11 @@ jobs:
         with:
           node-version: '22'
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: native-cache
+        with:
+          path: .runtime/windows-audio-cache
+          key: windows-audio-v1-${{ hashFiles('scripts/prepare_windows_native.py', 'packaging/build-windows-audio.sh', 'packaging/windows-sources.json', 'requirements-windows.txt') }}
       - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         id: msys2
         with:
@@ -51,6 +56,12 @@ jobs:
         env:
           FX_MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
         run: ./Build-Windows.ps1 -MSYSRoot $env:FX_MSYS2_ROOT
+      - name: Save verified native audio for subsequent packaging checks
+        if: always() && steps.native-cache.outputs.cache-hit != 'true' && hashFiles('.runtime/windows-audio-cache/cache.json') != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .runtime/windows-audio-cache
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Require both portable app and tested installer
         shell: pwsh
         run: |

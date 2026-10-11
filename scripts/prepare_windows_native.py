@@ -20,11 +20,71 @@ ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / '.runtime/windows-native'
 MATERIALS = ROOT / '.runtime/windows-native-materials'
 MANIFEST = ROOT / 'packaging/windows-sources.json'
+CACHE = ROOT / '.runtime/windows-audio-cache'
 
 
 def digest(path):
     with Path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def cache_key():
+    inputs = ('scripts/prepare_windows_native.py', 'packaging/build-windows-audio.sh',
+              'packaging/windows-sources.json', 'requirements-windows.txt')
+    return {name: digest(ROOT / name) for name in inputs}
+
+
+def restore_cache():
+    if not (CACHE / 'cache.json').is_file():
+        return False
+    from collect_licenses import validate_license_bundle
+    try:
+        if json.loads((CACHE / 'cache.json').read_text()) != cache_key():
+            return False
+        inventory = validate_license_bundle(CACHE / 'materials')
+        records = {r['path']: r['sha256'] for r in inventory['binaries']}
+        if digest(CACHE / 'materials/sources/source-manifest.json') != digest(MANIFEST):
+            return False
+        for name in ('prepare_windows_native.py', 'build-windows-audio.sh'):
+            original = ROOT / ('scripts' if name.endswith('.py') else 'packaging') / name
+            if digest(CACHE / 'materials/sources' / name) != digest(original):
+                return False
+        for name in ('compiler.txt', 'msys2-packages.txt'):
+            if digest(CACHE / name) != digest(CACHE / 'materials/sources' / name):
+                return False
+        for name in ('config.h', 'config_components.h', 'config.mak'):
+            if digest(CACHE / 'bin' / name) != digest(CACHE / 'materials/sources' / name):
+                return False
+        if digest(CACHE / 'bin/ffmpeg.exe') != records['tools/ffmpeg.exe']:
+            return False
+        dlls = list((CACHE / 'prefix-bin').glob('*sndfile*.dll'))
+        if len(dlls) != 1 or digest(dlls[0]) != records['python/Lib/site-packages/_soundfile_data/libsndfile_x64.dll']:
+            return False
+        for name, expected in records.items():
+            if name.startswith('python/') and '/site-packages/' not in name:
+                if digest(WORK / 'runtime' / name) != expected:
+                    return False
+    except (OSError, ValueError, KeyError):
+        print('Native audio cache is invalid; rebuilding from pinned sources.', flush=True)
+        return False
+    shutil.rmtree(MATERIALS, ignore_errors=True)
+    shutil.copytree(CACHE / 'materials', MATERIALS)
+    shutil.copytree(CACHE / 'bin', WORK / 'bin', dirs_exist_ok=True)
+    shutil.copytree(CACHE / 'prefix-bin', WORK / 'prefix/bin', dirs_exist_ok=True)
+    for name in ('compiler.txt', 'msys2-packages.txt'):
+        shutil.copy2(CACHE / name, WORK / name)
+    print('Reusing verified native audio binaries with their matching sources and notices.', flush=True)
+    return True
+
+
+def save_cache():
+    shutil.rmtree(CACHE, ignore_errors=True)
+    shutil.copytree(MATERIALS, CACHE / 'materials')
+    shutil.copytree(WORK / 'bin', CACHE / 'bin')
+    shutil.copytree(WORK / 'prefix/bin', CACHE / 'prefix-bin')
+    for name in ('compiler.txt', 'msys2-packages.txt'):
+        shutil.copy2(WORK / name, CACHE / name)
+    (CACHE / 'cache.json').write_text(json.dumps(cache_key(), indent=2) + '\n')
 
 
 def fetch(record, target):
@@ -152,15 +212,17 @@ def build(msys_root):
     if sys.platform != 'win32':
         raise ValueError('Native compilation needs Windows x64; --prepare-only is available on macOS.')
     msys_root = Path(msys_root).resolve()
-    for name in ('build','prefix','bin'):
-        shutil.rmtree(WORK/name,ignore_errors=True)
+    reused = restore_cache()
     bash = msys_root / 'usr/bin/bash.exe'
     environment = {**os.environ, 'MSYSTEM': 'MINGW64', 'CHERE_INVOKING': '1', 'MSYS2_PATH_TYPE': 'minimal'}
     # bash accepts its POSIX /c/... path. Do not construct shell commands from
     # external input; the recipe and build directory are separate arguments.
     recipe = str((ROOT / 'packaging/build-windows-audio.sh').resolve()).replace('\\', '/')
     recipe = '/' + recipe[0].lower() + recipe[2:] if len(recipe) > 1 and recipe[1] == ':' else recipe
-    subprocess.run([str(bash), '-l', recipe, str(WORK)], check=True, env=environment)
+    if not reused:
+        for name in ('build','prefix','bin'):
+            shutil.rmtree(WORK/name,ignore_errors=True)
+        subprocess.run([str(bash), '-l', recipe, str(WORK)], check=True, env=environment)
     python = ROOT / '.venv/Scripts/python.exe'
     if not python.is_file():
         raise ValueError('Prepare the pinned Windows .venv before finalizing native materials.')
@@ -197,9 +259,10 @@ def build(msys_root):
     if not crypto_openssl.startswith('OpenSSL 4.0.3 '):
         raise ValueError('Resolve matching cryptography OpenSSL notices: ' + crypto_openssl)
     toolchain = MATERIALS / 'software/toolchain'
-    for folder in (msys_root / 'mingw64/share/licenses', msys_root / 'usr/share/licenses'):
-        if folder.is_dir():
-            shutil.copytree(folder, toolchain / folder.parent.parent.name, dirs_exist_ok=True)
+    if not reused:
+        for folder in (msys_root / 'mingw64/share/licenses', msys_root / 'usr/share/licenses'):
+            if folder.is_dir():
+                shutil.copytree(folder, toolchain / folder.parent.parent.name, dirs_exist_ok=True)
     if not any(p.is_file() and notice(p.name) for p in toolchain.rglob('*')):
         raise ValueError('Missing MinGW/runtime license texts.')
     for name in ('compiler.txt', 'msys2-packages.txt'):
@@ -220,6 +283,8 @@ def build(msys_root):
     for name, version, license, prefix in [
         ('CPython and embedded native libraries', '3.11.11', 'PSF and upstream terms', 'software/cpython'),
         ('SentencePiece', '0.2.1', 'Apache-2.0 and supplied notices', 'software/sentencepiece-0.2.1'),
+        ('ai-edge-litert', '2.2.0', 'Apache-2.0', 'software/ai-edge-litert-2.2.0'),
+        ('flatbuffers', '25.12.19', 'Apache-2.0', 'software/flatbuffers-25.12.19'),
         ('OpenSSL in cryptography', '4.0.3', 'Apache-2.0', 'software/openssl-4.0.3'),
         ('FFmpeg / LAME / libsndfile and linked audio codecs', '8.0.1 / 3.100 / 1.2.2', 'LGPL and supplied BSD terms', 'software/audio'),
         ('MinGW runtime and build tool notices', 'recorded in msys2-packages.txt', 'Upstream terms and GCC Runtime Library Exception', 'software/toolchain')]:
@@ -233,6 +298,8 @@ def build(msys_root):
     (MATERIALS / 'inventory.json').write_text(json.dumps(inventory, indent=2) + '\n')
     from collect_licenses import validate_license_bundle
     validate_license_bundle(MATERIALS)
+    if not reused:
+        save_cache()
     print('Windows audio binaries and matching native license/source inventory verified.', flush=True)
 
 

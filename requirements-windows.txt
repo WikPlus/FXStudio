@@ -1,5 +1,6 @@
 # Windows x64 / managed CPython 3.11.11. No MLX or CUDA dependency.
 ai-edge-litert==2.2.0
+flatbuffers==25.12.19
 numpy==2.2.6
 soundfile==0.13.1
 sentencepiece==0.2.1

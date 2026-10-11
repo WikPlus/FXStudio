@@ -36,6 +36,8 @@ No Terminal, Homebrew, Node.js or separate Python installation is needed to use 
 
 ### Windows
 
+Install the latest [Microsoft Visual C++ v14 Redistributable, x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) if it is not already present. The official LiteRT wheel needs this Microsoft runtime, including `VCRUNTIME140_THREADS.dll`. The FX Studio installer links to Microsoft's download page when the runtime is missing.
+
 Download the Setup EXE from a release that includes a tested Windows asset. Run it to install for your user; administrator rights are not required. The portable alternative is `FXStudio-Windows-x64.zip`: extract the **whole folder**, then open **FX Studio.exe**. Keep `resources` and the other files beside it.
 
 Windows packages are unsigned. Check the release's checksum and download source before deciding whether to allow a Windows reputation warning. Do not disable your computer's protection globally.
