@@ -6,8 +6,10 @@ import os
 import re
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 from package_windows import audit_zip
+from recover_windows_reports import recover
 
 
 def gh(*args):
@@ -33,8 +35,18 @@ def main():
         folder = Path(temp)
         downloads = folder / 'downloads'
         reports = folder / 'reports'
+        recovered_from_log = False
         gh('run', 'download', run_id, '--repo', repo, '--name', 'FXStudio-Windows-x64', '--dir', str(downloads))
-        gh('run', 'download', run_id, '--repo', repo, '--name', 'Windows-test-reports', '--dir', str(reports))
+        try:
+            gh('run', 'download', run_id, '--repo', repo, '--name', 'Windows-test-reports', '--dir', str(reports))
+        except subprocess.CalledProcessError:
+            if os.environ.get('FX_RECOVER_REPORTS_FROM_LOG') != 'true':
+                raise
+            # Earlier upload-artifact versions excluded the hidden .runtime
+            # report folder. Recover actual printed results, then subject them
+            # to exactly the same acceptance checks as normal report artifacts.
+            recover(gh('run', 'view', run_id, '--repo', repo, '--log'), reports)
+            recovered_from_log = True
         behavior = json.loads((reports / 'behavior-tests.json').read_text())
         if (behavior['platform'] != 'win32' or behavior['passed'] is not True
                 or behavior['tests'] < 1 or any(behavior[key] for key in ('failures', 'errors', 'skipped'))):
@@ -66,7 +78,15 @@ def main():
         with (downloads / 'FXStudio-Windows-x64-Setup.exe').open('rb') as stream:
             if stream.read(2) != b'MZ':
                 raise ValueError('Installer is not a Windows executable')
-        gh('release', 'upload', tag, *assets, '--repo', repo, '--clobber')
+        proof = folder / 'FXStudio-Windows-acceptance.zip'
+        (reports / 'PROVENANCE.txt').write_text(
+            f'Native Windows acceptance: {run["html_url"]}\nBuild source: {run["head_sha"]}\n'
+            f'Report source: {"printed native CI reports and passing unittest summary (hidden report artifact was omitted)" if recovered_from_log else "native CI artifact"}\n',
+            encoding='utf-8')
+        with zipfile.ZipFile(proof, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(reports.iterdir()):
+                archive.write(path, path.name)
+        gh('release', 'upload', tag, *assets, str(proof), '--repo', repo, '--clobber')
         print(f'Attached verified Windows assets from {run["head_sha"]} to draft {tag}.')
 
 

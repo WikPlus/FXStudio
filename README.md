@@ -19,7 +19,7 @@ Get the compiled app from **[GitHub Releases](https://github.com/WikPlus/FXStudi
 | Platform | Download | Generation engine | Status |
 | --- | --- | --- | --- |
 | macOS 26.2+, Apple Silicon | `FXStudio-macOS-arm64.zip` | Official MLX | Tested on an M1 Pro with 16 GB unified memory |
-| Windows 10/11, x64 | `FXStudio-Windows-x64-Setup.exe` or portable ZIP | Official LiteRT, CPU | Native CI acceptance in progress; see [Actions](https://github.com/WikPlus/FXStudio/actions/workflows/windows.yml) |
+| Windows 10/11, x64 | `FXStudio-Windows-x64-Setup.exe` or portable ZIP | Official LiteRT, CPU | Native build, installer and real Medium generation [tested](https://github.com/WikPlus/FXStudio/actions/runs/38162515184) |
 
 Intel Macs, Windows ARM and Linux are not supported by these packages. Windows uses quantized Medium weights; its speed and output are not identical to MLX. A small test clip is not a promise of performance on every computer.
 
@@ -36,11 +36,15 @@ No Terminal, Homebrew, Node.js or separate Python installation is needed to use 
 
 ### Windows
 
+The bundled LiteRT runtime requires an **x64 CPU with AVX2, FMA and F16C**, matching its [official Windows build flags](https://github.com/google-ai-edge/LiteRT/blob/145c7523ff08d5e57ab5c582141775eea47da9c7/ci/build_pip_package_with_bazel_windows.ps1). Windows ARM is not supported by this package.
+
 Install the latest [Microsoft Visual C++ v14 Redistributable, x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) if it is not already present. The official LiteRT wheel needs this Microsoft runtime, including `VCRUNTIME140_THREADS.dll`. The FX Studio installer links to Microsoft's download page when the runtime is missing.
 
 Download the Setup EXE from a release that includes a tested Windows asset. Run it to install for your user; administrator rights are not required. The portable alternative is `FXStudio-Windows-x64.zip`: extract the **whole folder**, then open **FX Studio.exe**. Keep `resources` and the other files beside it.
 
 Windows packages are unsigned. Check the release's checksum and download source before deciding whether to allow a Windows reputation warning. Do not disable your computer's protection globally.
+
+Native Windows CI passed **62 behavior tests**, standalone MCP/CLI/project and crop/MP3 checks, silent installation/uninstallation, and a real one-second Medium generation. Desktop playback and dragging into a particular editing application still need hands-on testing on Windows.
 
 ### The model downloads automatically
 

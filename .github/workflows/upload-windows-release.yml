@@ -12,6 +12,10 @@ on:
         required: true
         default: 'v0.1.0'
         type: string
+      recover_reports_from_log:
+        description: 'Recover printed native reports if an older run omitted the hidden report folder'
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -31,4 +35,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
           FX_TESTED_RUN_ID: ${{ inputs.run_id }}
           FX_RELEASE_TAG: ${{ inputs.release_tag }}
+          FX_RECOVER_REPORTS_FROM_LOG: ${{ inputs.recover_reports_from_log }}
         run: python3 scripts/upload_windows_release.py
