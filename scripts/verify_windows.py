@@ -86,6 +86,33 @@ with (folder/'service-output.txt').open('w') as log:
                 time.sleep(.1)
         else:raise AssertionError('Bundled service did not start')
         report['bundled_service_start']=True
+        # Exercise the actual packaged stdio adapter and CLI against this
+        # isolated service, including its real opt-in credential handling.
+        req=urllib.request.Request(f'http://127.0.0.1:{port}/api/agents',
+            data=json.dumps({'enabled':True}).encode(),
+            headers={'X-FX-Token':token,'Content-Type':'application/json'})
+        with urllib.request.urlopen(req,timeout=5) as response:json.load(response)
+        import asyncio
+        async def check_mcp():
+            from mcp import Client,StdioServerParameters
+            params=StdioServerParameters(command=sys.executable,
+                args=['-s','-B',str(app/'backend/mcp_server.py')],
+                env={**env,'FX_AGENT_NO_LAUNCH':'1'},cwd=str(folder))
+            async with Client(params) as client:
+                tools=await client.list_tools();assert len(tools.tools)==20
+                state=await client.call_tool('get_status')
+                assert not state.is_error and state.structured_content['ready']
+                guide=await client.call_tool('get_prompt_guide')
+                assert not guide.is_error and 'Camera shutter' in str(guide.structured_content)
+                created=await client.call_tool('create_project',{'name':'Packaged MCP project'})
+                assert not created.is_error and created.structured_content['id']
+                project=await client.call_tool('get_project',{'project_id':created.structured_content['id']})
+                assert not project.is_error
+        asyncio.run(check_mcp())
+        cli=subprocess.run([sys.executable,'-s','-B',str(app/'backend/agent_cli.py'),'status'],
+            cwd=folder,env={**env,'FX_AGENT_NO_LAUNCH':'1'},check=True,capture_output=True,text=True)
+        assert json.loads(cli.stdout)['ready']
+        report.update(bundled_mcp_20_tools=True,bundled_mcp_project_workflow=True,bundled_agent_cli=True)
     finally:service.terminate();service.wait(timeout=15)
 print(json.dumps(report))
 '''

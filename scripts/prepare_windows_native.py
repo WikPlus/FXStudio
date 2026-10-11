@@ -130,7 +130,7 @@ def prepare():
         'python_exe_sha256':digest(WORK/'runtime/python/python.exe'),
         'full_release_binary_match':True,
         'archives':[r for r in manifest['archives'] if r['file'].startswith('cpython-')]},indent=2)+'\n')
-    for record in manifest['sentencepiece_texts']:
+    for record in manifest['sentencepiece_texts'] + manifest.get('additional_texts', []):
         fetch(record, MATERIALS / 'software' / record['file'])
     shutil.copy2(MANIFEST, MATERIALS / 'sources/source-manifest.json')
     for name in ('prepare_windows_native.py',):
@@ -190,6 +190,12 @@ def build(msys_root):
     subprocess.run([str(python), '-I', '-c',
         'import soundfile as s; assert s.__libsndfile_version__ == "1.2.2"; '
         'assert all(f in s.available_formats() for f in ("WAV", "FLAC", "OGG", "MP3")); print(s.available_formats())'], check=True)
+    crypto_openssl = subprocess.run([str(python), '-I', '-c',
+        'from cryptography.hazmat.bindings.openssl.binding import Binding; '
+        'b=Binding(); print(b.ffi.string(b.lib.OpenSSL_version(0)).decode())'],
+        check=True, capture_output=True, text=True).stdout.strip()
+    if not crypto_openssl.startswith('OpenSSL 4.0.3 '):
+        raise ValueError('Resolve matching cryptography OpenSSL notices: ' + crypto_openssl)
     toolchain = MATERIALS / 'software/toolchain'
     for folder in (msys_root / 'mingw64/share/licenses', msys_root / 'usr/share/licenses'):
         if folder.is_dir():
@@ -208,11 +214,13 @@ def build(msys_root):
     build_info = {'platform': 'win32', 'source_changes': 'None; configure/CMake options in the supplied recipe.',
                   'binaries': records, 'system_dependencies': dependencies,
                   'compiler': (WORK / 'compiler.txt').read_text(), 'python_source_release': '20250317'}
+    build_info['cryptography_openssl'] = crypto_openssl
     (MATERIALS / 'sources/build.json').write_text(json.dumps(build_info, indent=2) + '\n')
     components = []
     for name, version, license, prefix in [
         ('CPython and embedded native libraries', '3.11.11', 'PSF and upstream terms', 'software/cpython'),
         ('SentencePiece', '0.2.1', 'Apache-2.0 and supplied notices', 'software/sentencepiece-0.2.1'),
+        ('OpenSSL in cryptography', '4.0.3', 'Apache-2.0', 'software/openssl-4.0.3'),
         ('FFmpeg / LAME / libsndfile and linked audio codecs', '8.0.1 / 3.100 / 1.2.2', 'LGPL and supplied BSD terms', 'software/audio'),
         ('MinGW runtime and build tool notices', 'recorded in msys2-packages.txt', 'Upstream terms and GCC Runtime Library Exception', 'software/toolchain')]:
         texts = [p.relative_to(MATERIALS).as_posix() for p in sorted((MATERIALS / prefix).rglob('*')) if p.is_file() and notice(p.name)]

@@ -32,6 +32,7 @@ build_autoconf lame-3.100 --disable-frontend
 
 cmake -S libsndfile-1.2.2 -B "$work/build/sndfile" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \
+  -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DCMAKE_C_STANDARD=11 \
   -DCMAKE_SHARED_LINKER_FLAGS=-static-libgcc \
   -DBUILD_SHARED_LIBS=ON -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF \
