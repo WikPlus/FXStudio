@@ -15,8 +15,12 @@ def audit_zip(path):
             relative = PurePosixPath(name)
             if relative.is_absolute() or '..' in relative.parts or '\\' in name:
                 raise ValueError('Unsafe ZIP path: ' + name)
-            if relative.suffix.lower() in {'.wav','.mp3','.npz','.safetensors','.tflite','.sqlite','.pyc'} or relative.name in {'agent-access.json','.env'}:
+            if relative.suffix.lower() in {'.wav','.mp3','.safetensors','.tflite','.sqlite','.pyc'} or relative.name in {'agent-access.json','.env'} or relative.name.startswith('studio.sqlite'):
                 raise ValueError('Private data/model weights/bytecode in release: ' + name)
+            # NumPy ships tiny NPZ test fixtures. Apply the same model-weight
+            # guard as the Mac packager rather than rejecting its dependencies.
+            if relative.suffix.lower()=='.npz' and (archive.getinfo(name).file_size>1024**2 or '.runtime' in relative.parts):
+                raise ValueError('Model weights in release: ' + name)
         for name in ('FX Studio Windows/FX Studio.exe',root+'python/python.exe',root+'tools/ffmpeg.exe'):
             if archive.read(name)[:2] != b'MZ':
                 raise ValueError('Missing Windows executable: ' + name)
