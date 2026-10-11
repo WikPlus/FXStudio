@@ -183,7 +183,7 @@ def build(msys_root):
     for binary in (ffmpeg, target):
         pe = subprocess.run([str(objdump), '-p', str(binary)], check=True, capture_output=True, text=True).stdout
         imports = [line.split('DLL Name:', 1)[1].strip() for line in pe.splitlines() if 'DLL Name:' in line]
-        allowed = {'kernel32.dll', 'msvcrt.dll', 'ucrtbase.dll', 'user32.dll', 'advapi32.dll', 'shell32.dll', 'ole32.dll', 'ws2_32.dll', 'bcrypt.dll', 'secur32.dll'}
+        allowed = {'kernel32.dll', 'msvcrt.dll', 'ucrtbase.dll', 'user32.dll', 'advapi32.dll', 'shell32.dll', 'shlwapi.dll', 'ole32.dll', 'ws2_32.dll', 'bcrypt.dll', 'secur32.dll'}
         if any(name.lower() not in allowed and not name.lower().startswith('api-ms-win-') for name in imports):
             raise ValueError('Unexpected non-system DLL dependencies: ' + str(imports))
         dependencies[binary.name] = imports

@@ -18,12 +18,14 @@ Get the compiled app from **[GitHub Releases](https://github.com/WikPlus/FXStudi
 
 | Platform | Download | Generation engine | Status |
 | --- | --- | --- | --- |
-| macOS, Apple Silicon | `FXStudio-macOS-arm64.zip` | Official MLX | Tested on an M1 Pro with 16 GB unified memory |
+| macOS 26.2+, Apple Silicon | `FXStudio-macOS-arm64.zip` | Official MLX | Tested on an M1 Pro with 16 GB unified memory |
 | Windows 10/11, x64 | `FXStudio-Windows-x64-Setup.exe` or portable ZIP | Official LiteRT, CPU | Native CI acceptance in progress; see [Actions](https://github.com/WikPlus/FXStudio/actions/workflows/windows.yml) |
 
 Intel Macs, Windows ARM and Linux are not supported by these packages. Windows uses quantized Medium weights; its speed and output are not identical to MLX. A small test clip is not a promise of performance on every computer.
 
 ### macOS
+
+This package requires **macOS 26.2 or newer** because of its bundled MLX native libraries. The minimum is read from the actual bundled binaries, rather than inherited from Electron.
 
 1. Download and unzip `FXStudio-macOS-arm64.zip`.
 2. Move **FX Studio.app** into **Applications**.

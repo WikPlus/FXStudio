@@ -22,7 +22,8 @@ license/source files.
   https://chromium.googlesource.com/chromium/src/ and
   https://chromium.googlesource.com/chromium/third_party/ffmpeg/.
 - **CPython 3.11.11:** PSF/Python license and the upstream standalone runtime's
-  embedded library notices are in `ui/licenses/software/python-3.11.11/`.
+  embedded library notices are in `ui/licenses/software/python-3.11.11/` on
+  Mac and `ui/licenses/windows-native/software/cpython/` on Windows.
   Sources and build metadata: https://github.com/astral-sh/python-build-standalone
   and https://github.com/python/cpython/tree/v3.11.11.
 - **Python packages:** full supplied LICENSE/COPYING/NOTICE/copyright texts are
@@ -31,7 +32,10 @@ license/source files.
   used by MLX, NumPy, MCP and their dependencies. Unmodified `tqdm` Python source
   is included in the app's `python` site-packages together with its MPL/MIT text.
 - **SentencePiece:** Apache 2.0 and its Darts, esaxx and protobuf-lite notices are
-  included separately because the macOS wheel omits them.
+  included separately to cover notices omitted from wheels.
+- **OpenSSL in cryptography:** its separately linked OpenSSL license accompanies
+  the package notices. The native Windows builder checks the actual OpenSSL
+  version against the supplied license materials.
 - **Feather SVG icons:** MIT; copyright and full text in `ui/licenses/feather.txt`.
 - **Stable Audio 3 inference code:** MIT, Copyright (c) 2026 Stability AI. The
   original runtime license accompanies the copied source. The Mac and Windows
@@ -74,9 +78,15 @@ components must preserve compatible file names, interfaces and loader paths.
 macOS may require a fresh local ad hoc signature after changing a bundle;
 Apple Developer Program membership is not needed for that local signature.
 
-Windows native components are checked separately. Its builder requires the
-version-matched native license/source directory; it must not claim that the
-Mac FFmpeg or libsndfile source evidence covers another Windows binary.
+Windows native components are compiled and checked separately. Its complete
+audio source archives, build recipes, configuration, binary hashes and native
+notices are in `ui/licenses/windows-native/`. The Windows exporter links LAME
+statically; libsndfile is shared, with the supplied static audio codecs.
+`windows-native/sources/build.json` records the actual compiler and dependencies.
+Rebuild from a FX Studio source checkout using `Build-Windows.ps1`; the supplied
+audio archives can be reused from `.runtime/legal-cache/`. The corresponding
+recipe is `packaging/build-windows-audio.sh`. These Windows materials describe
+the Windows binaries rather than reusing the Mac binary evidence.
 
 ## Separately downloaded model materials
 

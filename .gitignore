@@ -14,6 +14,11 @@ exports/
 *.mp3
 *.npz
 *.safetensors
+*.tflite
+.env
+.env.*
+agent-access.json
+library-root.txt
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

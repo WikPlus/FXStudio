@@ -12,11 +12,11 @@ import sys
 import sysconfig
 from pathlib import Path
 from collect_licenses import collect
+from macos_runtime import MACH_HEADERS, minimum_macos
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / 'dist/FX Studio.app'
 APP = TARGET / 'Contents/Resources/app'
-MACH_HEADERS = {b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe', b'\xca\xfe\xba\xbe', b'\xca\xfe\xba\xbf'}
 
 
 def run(*args, capture=False):
@@ -143,13 +143,14 @@ def main():
     print('Compiling the native launcher and signing the app …', flush=True)
     run('/usr/bin/xcrun', 'clang', '-arch', 'arm64', '-O2', '-Wall', '-Wextra',
         ROOT / 'desktop/launcher.c', '-o', TARGET / 'Contents/MacOS/FXStudio')
+    minimum_os = minimum_macos(TARGET)
     plist = TARGET / 'Contents/Info.plist'
     with plist.open('rb') as stream: info = plistlib.load(stream)
     info.update(CFBundleExecutable='FXStudio', CFBundleName='FX Studio',
                 CFBundleDisplayName='FX Studio', CFBundleIdentifier='com.fxstudio.desktop',
                 CFBundleShortVersionString=package['version'], CFBundleVersion=package['version'],
                 CFBundleDevelopmentRegion='en', CFBundleLocalizations=['en'],
-                CFBundleIconFile='fxstudio.icns')
+                CFBundleIconFile='fxstudio.icns', LSMinimumSystemVersion=minimum_os)
     from app_icon import write_icon
     write_icon(resources / 'fxstudio.icns')
     with plist.open('wb') as stream: plistlib.dump(info, stream)
@@ -157,7 +158,7 @@ def main():
     for path in TARGET.rglob('*'):
         if path.is_symlink() and (Path(os.readlink(path)).is_absolute() or not path.resolve().is_relative_to(TARGET)):
             raise RuntimeError(f'External symlink in app: {path.relative_to(TARGET)}')
-    manifest = {'version': package['version'], 'architecture': 'arm64',
+    manifest = {'version': package['version'], 'architecture': 'arm64', 'minimum_macos': minimum_os,
                 'electron': (ROOT / 'node_modules/electron/dist/version').read_text().strip(),
                 'python': sys.version.split()[0], 'bundled_ffmpeg_libraries': sorted(ffmpeg_libraries),
                 'ffmpeg_license': 'LGPL-2.1-or-later', 'license_inventory': license_inventory,

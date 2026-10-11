@@ -11,6 +11,8 @@ mkdir -p "$prefix" "$work/build"
 # pre-C23 function declaration semantics without changing upstream sources.
 export CFLAGS='-O2 -std=gnu11'
 export CXXFLAGS='-O2'
+export CC="$(cygpath -am /mingw64/bin/gcc.exe)"
+export CXX="$(cygpath -am /mingw64/bin/g++.exe)"
 export LDFLAGS='-static-libgcc'
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
 export CPPFLAGS="-I$prefix/include"
@@ -33,6 +35,8 @@ build_autoconf lame-3.100 --disable-frontend
 cmake -S libsndfile-1.2.2 -B "$work/build/sndfile" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \
   -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DCMAKE_C_FLAGS="$CFLAGS -DFLAC__NO_DLL" \
+  -DCMAKE_C_STANDARD_LIBRARIES='-lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 -lshlwapi' \
   -DCMAKE_C_STANDARD=11 \
   -DCMAKE_SHARED_LINKER_FLAGS=-static-libgcc \
   -DBUILD_SHARED_LIBS=ON -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF \

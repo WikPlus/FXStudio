@@ -174,8 +174,9 @@ def collect(app, resources, electron, python_site, platform, exporter=None, nati
             'The original application code and agent skill use MIT. Each component below retains its own terms.', '',
             '| Component | Version | License |', '| --- | --- | --- |']
     rows.extend('| ' + ' | '.join(str(item[k]).replace('|', '/') for k in ('name', 'version', 'license')) + ' |' for item in components)
+    source_folder = 'windows-native/sources/' if platform == 'win32' else 'sources/'
     rows += ['', 'See THIRD_PARTY_NOTICES.md for source availability and replacing/rebuilding LGPL components.',
-             'Sources and their SHA-256 hashes are in sources/. No model agreement is accepted by the app.', '']
+             'Sources and their SHA-256 hashes are in ' + source_folder + '. No model agreement is accepted by the app.', '']
     (folder / 'README.md').write_text('\n'.join(rows))
     copy(ROOT / 'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md')
     manifest = {'schema': 1, 'platform': platform, 'components': components,

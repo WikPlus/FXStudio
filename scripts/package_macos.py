@@ -3,11 +3,13 @@ import hashlib
 import importlib.util
 import json
 import os
+import plistlib
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
 from collect_licenses import validate_license_bundle
+from macos_runtime import minimum_macos
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +22,11 @@ def audit(bundle):
         raise ValueError('Expected a standalone Apple Silicon bundle without weights.')
     if manifest.get('standalone') is not True:
         raise ValueError('Expected the standalone app, not a development launcher.')
+    with (bundle / 'Contents/Info.plist').open('rb') as stream:
+        minimum_os = plistlib.load(stream).get('LSMinimumSystemVersion')
+    required = minimum_macos(bundle)
+    if minimum_os != required or manifest.get('minimum_macos') != required:
+        raise ValueError('Rebuild with the minimum macOS required by all bundled native dependencies: ' + required)
     if manifest.get('ffmpeg_license') != 'LGPL-2.1-or-later' or not manifest.get('license_inventory'):
         raise ValueError('Rebuild with the license/source collection and LGPL exporter before packaging.')
     validate_license_bundle(app / 'ui/licenses')
