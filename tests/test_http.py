@@ -1,12 +1,14 @@
 import http.client,json,os,secrets,socket,subprocess,sys,tempfile,time,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'backend'))
+from processes import process_options,terminate_tree
 class HTTPTests(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
   cls.temp=tempfile.TemporaryDirectory();cls.token=secrets.token_hex(20)
   with socket.socket() as sock:sock.bind(('127.0.0.1',0));cls.port=sock.getsockname()[1]
-  cls.service=subprocess.Popen([sys.executable,str(ROOT/'tests/http_service_fixture.py')],env={**os.environ,'FX_PORT':str(cls.port),'FX_DATA_DIR':cls.temp.name,'FX_SESSION_TOKEN':cls.token},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  cls.service=subprocess.Popen([sys.executable,str(ROOT/'tests/http_service_fixture.py')],env={**os.environ,'FX_PORT':str(cls.port),'FX_DATA_DIR':cls.temp.name,'FX_SESSION_TOKEN':cls.token},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,**process_options())
   end=time.monotonic()+8
   while time.monotonic()<end:
    try:
@@ -15,7 +17,9 @@ class HTTPTests(unittest.TestCase):
   else:raise AssertionError('Dienst nicht bereit')
  @classmethod
  def tearDownClass(cls):
-  cls.service.terminate();cls.service.wait(timeout=8);cls.temp.cleanup()
+  # Windows terminate() stops only the parent; a downloader can still write
+  # into the temporary directory. Match the app's complete-tree shutdown.
+  terminate_tree(cls.service);cls.service.wait(timeout=8);cls.temp.cleanup()
  @classmethod
  def request(cls,method,path,body=None,headers=None):
   conn=http.client.HTTPConnection('127.0.0.1',cls.port,timeout=5);h={'X-FX-Token':cls.token,**(headers or {})}
