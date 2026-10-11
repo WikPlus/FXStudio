@@ -13,7 +13,9 @@ export CFLAGS='-O2 -std=gnu11'
 export CXXFLAGS='-O2'
 export CC="$(cygpath -am /mingw64/bin/gcc.exe)"
 export CXX="$(cygpath -am /mingw64/bin/g++.exe)"
-export LDFLAGS='-static-libgcc'
+# Keep the GCC POSIX-thread runtime inside the tools. End users do not have
+# MSYS2's libwinpthread-1.dll; its matching notices are collected below.
+export LDFLAGS='-static -static-libgcc'
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
 export CPPFLAGS="-I$prefix/include"
 export LIBRARY_PATH="$prefix/lib"
@@ -39,7 +41,7 @@ cmake -S libsndfile-1.2.2 -B "$work/build/sndfile" -G Ninja \
   -DCMAKE_C_STANDARD_LIBRARIES='-lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 -lshlwapi' \
   -DPYTHON_EXECUTABLE="$(cygpath -am "$work/runtime/python/python.exe")" \
   -DCMAKE_C_STANDARD=11 \
-  -DCMAKE_SHARED_LINKER_FLAGS=-static-libgcc \
+  -DCMAKE_SHARED_LINKER_FLAGS='-static -static-libgcc' \
   -DBUILD_SHARED_LIBS=ON -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF \
   -DBUILD_TESTING=OFF -DBUILD_REGTEST=OFF -DENABLE_EXTERNAL_LIBS=ON -DENABLE_MPEG=ON
 cmake --build "$work/build/sndfile" --parallel "$jobs"
@@ -60,7 +62,7 @@ cd "$work/build/ffmpeg"
   --enable-parser=mpegaudio,flac,vorbis,opus \
   --enable-encoder=pcm_s16le,libmp3lame --enable-filter=aresample,anull,aformat \
   --enable-libmp3lame --pkg-config-flags=--static \
-  --extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -static-libgcc"
+  --extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -static -static-libgcc"
 make -j"$jobs" ffmpeg.exe
 mkdir -p "$work/bin"
 cp ffmpeg.exe "$work/bin/ffmpeg.exe"
