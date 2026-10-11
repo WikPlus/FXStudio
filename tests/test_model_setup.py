@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import os
 import subprocess
 import sys
@@ -110,6 +111,13 @@ class DownloadIntegrityTests(unittest.TestCase):
         self.cached=self.root/'cache.tflite';self.cached.write_bytes(b'\x00\x00\x00\x00TFL3test bytes')
         self.spec={'repo':'test','revision':'pinned','files':[{'name':'medium/model.tflite','remote':'tflite/medium/model.tflite','size':self.cached.stat().st_size,'sha256':hashlib.sha256(self.cached.read_bytes()).hexdigest()}]}
     def tearDown(self):self.temp.cleanup()
+    def test_installed_hub_accepts_download_progress_and_retry_options(self):
+        from huggingface_hub import hf_hub_download
+        from tqdm.auto import tqdm
+        # Validate the real installed API without a network/model download.
+        # Older Hub versions rejected tqdm_class only during first-run setup.
+        inspect.signature(hf_hub_download).bind(repo_id='test/model', revision='pinned',
+            filename='model.tflite', token=False, tqdm_class=tqdm, force_download=True)
     def test_exact_verified_file_progress_and_cache_reuse(self):
         events=[];calls=[]
         def download(**kwargs):calls.append(kwargs);return self.cached
