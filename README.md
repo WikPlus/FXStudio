@@ -8,7 +8,9 @@ A local agent can create a project, generate a named sound pack and export the f
 
 Built by [WIK+DEV](https://wikplus.dev/) · [X / @wik_plus](https://x.com/wik_plus) · [Buy me a coffee](https://buymeacoffee.com/wikplus)
 
-<!-- APP_SCREENSHOTS -->
+![FX Studio project with real generated sounds](docs/screenshots/projects.png)
+
+Screenshots show real Medium output in a separate demo project.
 
 ## Download and install
 
@@ -61,6 +63,8 @@ The **application source is MIT licensed**. The downloaded model has separate St
 
 Sounds, projects, seeds, settings, trims and favorites persist locally. There are no subscriptions, purchase gates, public generation endpoints or cloud agent connections.
 
+![Waveform trim and zoom](docs/screenshots/trim.png)
+
 ## Get cleaner results
 
 Start at **8 steps, CFG 1**, then make 2–4 variants and listen. More steps and higher CFG do not automatically improve a take. At CFG 1, a negative prompt has no effect.
@@ -88,6 +92,8 @@ Use one concrete event per asset: **source → action/event count → texture an
 > One page of a thick paper notebook turned slowly. A light papery scrape, a brief rustle and a soft settling tap. Recorded very close in a quiet room with little reverberation.
 
 More examples are included in the app and [English agent skill](ui/skills/fx-studio/SKILL.md). A fixed seed helps compare changes; a blank seed creates fresh takes. Audition the results: prompts cannot guarantee an exact event placement or perfect sound quality.
+
+![Generate sound with prompt examples](docs/screenshots/generate.png)
 
 ## Use with a local agent
 
