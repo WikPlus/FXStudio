@@ -36,6 +36,7 @@ jobs:
           node-version: '22'
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
       - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        id: msys2
         with:
           msystem: MINGW64
           update: true
@@ -47,7 +48,9 @@ jobs:
             mingw-w64-x86_64-pkgconf
       - name: Build native software, verify licenses, test and package
         shell: pwsh
-        run: ./Build-Windows.ps1
+        env:
+          FX_MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./Build-Windows.ps1 -MSYSRoot $env:FX_MSYS2_ROOT
       - name: Require both portable app and tested installer
         shell: pwsh
         run: |

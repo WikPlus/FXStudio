@@ -37,6 +37,7 @@ cmake -S libsndfile-1.2.2 -B "$work/build/sndfile" -G Ninja \
   -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DCMAKE_C_FLAGS="$CFLAGS -DFLAC__NO_DLL" \
   -DCMAKE_C_STANDARD_LIBRARIES='-lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 -lshlwapi' \
+  -DPYTHON_EXECUTABLE="$(cygpath -am "$work/runtime/python/python.exe")" \
   -DCMAKE_C_STANDARD=11 \
   -DCMAKE_SHARED_LINKER_FLAGS=-static-libgcc \
   -DBUILD_SHARED_LIBS=ON -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF \

@@ -155,7 +155,7 @@ def build(msys_root):
     for name in ('build','prefix','bin'):
         shutil.rmtree(WORK/name,ignore_errors=True)
     bash = msys_root / 'usr/bin/bash.exe'
-    environment = {**os.environ, 'MSYSTEM': 'MINGW64', 'CHERE_INVOKING': '1', 'MSYS2_PATH_TYPE': 'inherit'}
+    environment = {**os.environ, 'MSYSTEM': 'MINGW64', 'CHERE_INVOKING': '1', 'MSYS2_PATH_TYPE': 'minimal'}
     # bash accepts its POSIX /c/... path. Do not construct shell commands from
     # external input; the recipe and build directory are separate arguments.
     recipe = str((ROOT / 'packaging/build-windows-audio.sh').resolve()).replace('\\', '/')
