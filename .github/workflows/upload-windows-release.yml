@@ -1,0 +1,34 @@
+name: Upload verified Windows release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful Windows workflow run with real Medium acceptance'
+        required: true
+        type: string
+      release_tag:
+        description: 'Existing draft release tag'
+        required: true
+        default: 'v0.1.0'
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Audit successful build and attach downloads to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          FX_TESTED_RUN_ID: ${{ inputs.run_id }}
+          FX_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python3 scripts/upload_windows_release.py
