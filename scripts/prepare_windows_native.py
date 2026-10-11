@@ -95,7 +95,15 @@ def prepare():
     with tarfile.open(WORK / 'inputs/cpython-3.11.11-windows-install.tar.gz') as tar:
         for member in tar.getmembers():
             safe_relative(member.name)
-        tar.extractall(WORK / 'runtime', filter='data')
+            # A later preparation step may itself be running on this pinned
+            # Python. Windows locks loaded PYD/DLL files. Reuse a file only
+            # after comparing its bytes with the checksum-pinned archive.
+            target = WORK / 'runtime' / member.name
+            if member.isfile() and target.is_file() and not target.is_symlink():
+                expected = hashlib.sha256(tar.extractfile(member).read()).hexdigest()
+                if digest(target) == expected:
+                    continue
+            tar.extract(member, WORK / 'runtime', filter='data')
     full = WORK / 'inputs/cpython-3.11.11-windows-full.tar.zst'
     matched_python=False
     with full.open('rb') as compressed, zstandard.ZstdDecompressor().stream_reader(compressed) as decoded:
