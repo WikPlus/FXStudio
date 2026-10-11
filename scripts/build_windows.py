@@ -28,8 +28,10 @@ def main():
     electron=ROOT/'node_modules/electron/dist'
     runtime=ROOT/'.runtime/stable-audio-3-windows/optimized/tflite'
     ffmpeg=Path(args.ffmpeg or shutil.which('ffmpeg') or '')
-    if not (electron/'electron.exe').is_file() or not (runtime/'scripts/sa3_tflite.py').is_file():
-        raise SystemExit('Run Build-Windows.ps1 to prepare Electron and the pinned CPU runtime.')
+    if not (electron/'electron.exe').is_file():
+        raise SystemExit('The Electron executable is missing. Run node node_modules/electron/install.js before packaging.')
+    if not (runtime/'scripts/sa3_tflite.py').is_file():
+        raise SystemExit('The pinned CPU source is missing. Run scripts/prepare_windows.py before packaging.')
     if not ffmpeg.is_file():raise SystemExit('Provide a Windows FFmpeg executable: Build-Windows.ps1 -FFmpegPath C:\\path\\ffmpeg.exe')
     if not args.native_license_dir:
         raise SystemExit('Supply -NativeLicenseDir with the selected Windows binaries\' matching license texts, sources and inventory. See packaging/GITHUB-RELEASE.md. No incomplete release ZIP is produced.')

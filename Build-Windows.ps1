@@ -12,6 +12,9 @@ Invoke-BuildStep 'uv' @('run', '--no-project', '--python', '3.11.11', '--with', 
 Invoke-BuildStep 'uv' @('venv', '--python', '.runtime/windows-native/runtime/python/python.exe', '.venv')
 Invoke-BuildStep 'uv' @('pip', 'install', '--python', '.venv/Scripts/python.exe', '--only-binary=:all:', '-r', 'requirements-windows.txt')
 Invoke-BuildStep 'npm.cmd' @('ci')
+# Electron 44 downloads its binary separately from npm's package installation.
+Invoke-BuildStep 'node' @('node_modules/electron/install.js')
+if (-not (Test-Path 'node_modules/electron/dist/electron.exe')) { throw 'Electron installer did not produce the Windows executable.' }
 Invoke-BuildStep '.venv/Scripts/python.exe' @('scripts/prepare_windows.py')
 if (-not $FFmpegPath -and -not $NativeLicenseDir) {
     Invoke-BuildStep 'uv' @('run', '--no-project', '--python', '3.11.11', '--with', 'zstandard==0.25.0', 'scripts/prepare_windows_native.py', '--msys-root', $MSYSRoot)
