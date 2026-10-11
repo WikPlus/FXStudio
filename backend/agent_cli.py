@@ -33,6 +33,10 @@ def main():
 
 
 if __name__ == '__main__':
+    # JSON exchanged with local agents uses UTF-8, including Windows pipes.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8')
     try:
         main()
     except (ValueError, KeyError, OSError) as error:

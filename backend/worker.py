@@ -21,7 +21,7 @@ if runtime_kind() == 'tflite':
     package.__path__ = [str(RUNTIME / 'models')]
     sys.modules['models'] = package
     import sa3_tflite as engine
-    manifest = json.loads((ROOT / 'backend/windows_model.json').read_text())
+    manifest = json.loads((ROOT / 'backend/windows_model.json').read_text(encoding='utf-8'))
     paths = {'models/tflite/' + file['name']: model_folder() / file['name']
              for file in manifest['files']}
     def local_weight(relative, verbose=True):

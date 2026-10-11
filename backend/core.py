@@ -62,8 +62,8 @@ class Studio:
         self.db.execute("UPDATE jobs SET state='interrupted', finished=?, error='The app closed during this job. You can start it again.' WHERE state IN ('queued','running','cancelling')", (time.time(),))
         self.db.commit()
         try:
-            english_titles = dict(line.split('\t', 1) for line in (ROOT / 'backend/library_titles_en.tsv').read_text().splitlines() if line)
-            catalog = json.loads((self.library_root / 'katalog.json').read_text())
+            english_titles = dict(line.split('\t', 1) for line in (ROOT / 'backend/library_titles_en.tsv').read_text(encoding='utf-8').splitlines() if line)
+            catalog = json.loads((self.library_root / 'katalog.json').read_text(encoding='utf-8'))
             for asset in catalog['assets']:
                 path = (self.library_root / asset['path']).resolve()
                 if not path.is_relative_to(self.library_root.resolve()):
@@ -257,13 +257,13 @@ class Studio:
                     target = self.audio / (item_id + '.wav')
                     temporary.append(target)
                     self.execute('UPDATE jobs SET stage=0, step=0, total=0, message=? WHERE id=?', (f"Variant {variant + 1} of {settings['variants']} · Loading model …", job['id']))
-                    env = {**os.environ, 'HF_HUB_DISABLE_TELEMETRY': '1', 'DO_NOT_TRACK': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'PYTHONUNBUFFERED': '1', 'PYTORCH_ENABLE_MPS_FALLBACK': '1', 'TOKENIZERS_PARALLELISM': 'false'}
+                    env = {**os.environ, 'HF_HUB_DISABLE_TELEMETRY': '1', 'DO_NOT_TRACK': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'PYTHONUNBUFFERED': '1', 'PYTHONUTF8': '1', 'PYTORCH_ENABLE_MPS_FALLBACK': '1', 'TOKENIZERS_PARALLELISM': 'false'}
                     with self.lock:
                         if self.is_cancelled(job['id']):
                             break
                         self.process = subprocess.Popen(self.command_factory(settings, seed, target, reference), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1, env=env, cwd=ROOT, **process_options())
                     tail = []
-                    with (self.logs / (job['id'] + '.log')).open('a') as log:
+                    with (self.logs / (job['id'] + '.log')).open('a', encoding='utf-8') as log:
                         for line in self.process.stdout:
                             log.write(line)
                             log.flush()
@@ -596,7 +596,7 @@ class Studio:
                     process = subprocess.Popen(self.setup_command_factory(model_id), stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace',
                         cwd=ROOT, env={**os.environ, 'HF_HUB_DISABLE_TELEMETRY': '1',
-                        'DO_NOT_TRACK': '1', 'HF_HUB_OFFLINE': '0', 'TRANSFORMERS_OFFLINE': '0'}, **process_options())
+                        'DO_NOT_TRACK': '1', 'HF_HUB_OFFLINE': '0', 'TRANSFORMERS_OFFLINE': '0', 'PYTHONUTF8': '1'}, **process_options())
                     self.setup_process = process
                 for line in process.stdout:
                     tail.append(line.strip()); tail = tail[-6:]

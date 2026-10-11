@@ -108,10 +108,14 @@ with (folder/'service-output.txt').open('w') as log:
                 assert not created.is_error and created.structured_content['id']
                 project=await client.call_tool('get_project',{'project_id':created.structured_content['id']})
                 assert not project.is_error
-        asyncio.run(check_mcp())
+                return guide.structured_content['guide']
+        guide_text=asyncio.run(check_mcp())
         cli=subprocess.run([sys.executable,'-s','-B',str(app/'backend/agent_cli.py'),'status'],
-            cwd=folder,env={**env,'FX_AGENT_NO_LAUNCH':'1'},check=True,capture_output=True,text=True)
+            cwd=folder,env={**env,'FX_AGENT_NO_LAUNCH':'1'},check=True,capture_output=True,text=True,encoding='utf-8')
         assert json.loads(cli.stdout)['ready']
+        cli_guide=subprocess.run([sys.executable,'-s','-B',str(app/'backend/agent_cli.py'),'guide'],
+            cwd=folder,env={**env,'FX_AGENT_NO_LAUNCH':'1'},check=True,capture_output=True,text=True,encoding='utf-8')
+        assert json.loads(cli_guide.stdout)['guide']==guide_text
         report.update(bundled_mcp_20_tools=True,bundled_mcp_project_workflow=True,bundled_agent_cli=True)
     finally:service.terminate();service.wait(timeout=15)
 print(json.dumps(report))

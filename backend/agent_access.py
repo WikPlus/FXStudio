@@ -16,7 +16,7 @@ class AgentAccess:
         if self.path.is_symlink():
             raise ValueError('The agent credential file must not be a symbolic link.')
         if self.path.exists():
-            self.config = json.loads(self.path.read_text())
+            self.config = json.loads(self.path.read_text(encoding='utf-8'))
             if not isinstance(self.config.get('token'), str) or len(self.config['token']) < 32:
                 raise ValueError('The local agent credential file is invalid.')
             if os.name != 'nt':
@@ -29,7 +29,7 @@ class AgentAccess:
     def save(self):
         fd, name = tempfile.mkstemp(prefix='.agent-access-', dir=self.path.parent)
         try:
-            with os.fdopen(fd, 'w') as stream:
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
                 json.dump(self.config, stream)
                 stream.flush()
                 os.fsync(stream.fileno())

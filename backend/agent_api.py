@@ -192,7 +192,7 @@ class AgentAPI:
                         exports.append(self.write_sound(sound['id'], folder, name, format))
                 manifest = folder / 'manifest.json'
                 manifest.write_text(json.dumps({'app': 'FX Studio', 'pack_id': pack['id'], 'name': pack['name'],
-                                                'created': time.time(), 'project': pack['project'], 'sounds': exports}, indent=2, ensure_ascii=False) + '\n')
+                                                'created': time.time(), 'project': pack['project'], 'sounds': exports}, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
         except Exception:
             shutil.rmtree(folder)
             raise
@@ -204,7 +204,7 @@ class AgentAPI:
             status = self.studio.status()
             return {**status, 'agent_access': self.access.status(), 'queue_capacity': 8}
         if path == '/guide':
-            return {'guide': (ROOT / 'ui/skills/fx-studio/SKILL.md').read_text()}
+            return {'guide': (ROOT / 'ui/skills/fx-studio/SKILL.md').read_text(encoding='utf-8')}
         if path == '/projects':
             return {'projects': self.studio.projects(value('q'))}
         if path.startswith('/projects/'):

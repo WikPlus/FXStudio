@@ -29,7 +29,7 @@ def weight_spec(model_id=DEFAULT_MODEL, runtime=None):
         from runtime_paths import runtime_kind
         runtime = runtime_kind()
     if runtime == 'tflite':
-        return json.loads((Path(__file__).parent / 'windows_model.json').read_text())
+        return json.loads((Path(__file__).parent / 'windows_model.json').read_text(encoding='utf-8'))
     return {'repo': WEIGHTS_REPO, 'revision': WEIGHTS_REVISION,
             'files': [{'name': name, 'size': size, 'remote': 'MLX/' + name}
                       for name, size in model['files']]}

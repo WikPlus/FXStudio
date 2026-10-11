@@ -47,7 +47,7 @@ class AgentClient:
         if self.credentials.is_symlink():
             raise ValueError('The agent credential file must not be a symbolic link.')
         try:
-            config = json.loads(self.credentials.read_text())
+            config = json.loads(self.credentials.read_text(encoding='utf-8'))
         except FileNotFoundError:
             raise ValueError('Open FX Studio > Setup > Local agents and enable access.') from None
         if config.get('enabled') is not True:
