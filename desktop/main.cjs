@@ -117,10 +117,21 @@ ipcMain.handle('agent-action',async(event,action)=>{
   throw new Error('Unknown agent action.');
 });
 async function getItem(id){const r=await fetch(base+'/api/item/'+safeId(id),{headers:{'X-FX-Token':token}});if(!r.ok)throw new Error('File not found');return r.json();}
+ipcMain.handle('delete-project',async(event,raw)=>{
+  trusted(event);const id=safeId(raw);
+  const response=await fetch(base+'/api/project-deletion?project_id='+id,{headers:{'X-FX-Token':token}});
+  const plan=await response.json();if(!response.ok)throw new Error(plan.error||'The project could not be checked.');
+  if(!plan.can_delete)throw new Error('Finish or cancel the affected generation jobs before deleting this project.');
+  const detail=`Permanently deletes ${plan.generated_sounds} generated sounds and ${plan.files} internal files (${(plan.bytes/1048576).toFixed(1)} MB), including previous takes, saved crops, drag files and job logs.\n\n${plan.shared_sounds_kept} sounds used in other projects are kept. The sound library and files exported outside FX Studio are preserved. This cannot be undone.`;
+  const choice=await dialog.showMessageBox(win,{type:'warning',title:'Delete project',message:'Delete “'+plan.name+'”?',detail,buttons:['Delete project','Cancel'],defaultId:1,cancelId:1,noLink:true});
+  if(choice.response!==0)return {cancelled:true};
+  const deleted=await fetch(base+'/api/project-delete',{method:'POST',headers:{'X-FX-Token':token,'Content-Type':'application/json'},body:JSON.stringify({project_id:id,confirm_name:plan.name,revision:plan.revision})});
+  const result=await deleted.json();if(!deleted.ok)throw new Error(result.error||'The project could not be deleted.');return result;
+});
 ipcMain.handle('export-audio',async(event,data)=>{
   trusted(event);
   const id=safeId(data.id),format=data.format;
-  if(!['wav','mp3'].includes(format))throw new Error('Invalid format');
+  if(!['wav','mp3','ogg'].includes(format))throw new Error('Invalid format');
   const name=String(data.name||'FX Studio Sound').replace(/[\/:\x00-\x1f]/g,'-').slice(0,120);
   const pick=await dialog.showSaveDialog(win,{title:'Export sound',buttonLabel:'Save',defaultPath:join(app.getPath('downloads'),name+'.'+format),filters:[{name:format.toUpperCase(),extensions:[format]}]});
   if(pick.canceled)return {cancelled:true};
@@ -136,7 +147,7 @@ ipcMain.handle('prepare-drag',async(event,raw)=>{
   const id=safeId(raw);
   const response=await fetch(base+'/api/prepare-drag/'+id,{method:'POST',headers:{'X-FX-Token':token,'Content-Type':'application/json'},body:'{}'});
   const data=await response.json();if(!response.ok)throw new Error(data.error||'The audio file could not be prepared for dragging.');
-  if(!['wav','mp3'].includes(data.format)||!fs.existsSync(data.path))throw new Error('The prepared audio file is unavailable.');
+  if(!['wav','mp3','ogg'].includes(data.format)||!fs.existsSync(data.path))throw new Error('The prepared audio file is unavailable.');
   let icon;
   try{icon=await app.getFileIcon(data.path,{size:'small'})}catch{}
   if(!icon||icon.isEmpty())icon=nativeImage.createFromPath(join(root,'ui/assets/wik-dev.png')).resize({width:64});

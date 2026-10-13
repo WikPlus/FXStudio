@@ -10,7 +10,9 @@ import core
 
 class HTTPFixtureStudio(core.Studio):
     def __init__(self):
-        super().__init__(setup_command_factory=lambda model: [sys.executable, '-u',
+        super().__init__(command_factory=lambda settings, seed, target, reference: [sys.executable, '-u',
+            str(ROOT / 'tests/fixture_worker.py'), settings['prompt'], str(target), str(settings['seconds'])],
+            setup_command_factory=lambda model: [sys.executable, '-u',
             str(ROOT / 'tests/fixture_downloader.py'), 'success', str(self.data)])
 
     def model_status(self, model_id='medium'):

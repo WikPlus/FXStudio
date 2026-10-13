@@ -7,7 +7,7 @@ description: Create, organize by project, trim and export local sound effects or
 
 ## Operate the app
 
-The model is **Stable Audio 3 Medium**, using MLX on Apple Silicon macOS or the official LiteRT CPU runtime on Windows x64. All work is local. Windows generation can take longer; do not impose a short generation timeout or promise matching seeds across runtimes.
+The model is **Stable Audio 3 Medium**, using MLX on Apple Silicon macOS or the official LiteRT CPU runtime on Windows x64. All work is local. New sounds use **Generate → Format**: **OGG Vorbis (quality 5, initial default)**, **WAV (lossless)** or **MP3 (320 kbps)**, at 44.1 kHz stereo. The selection persists and is returned as `generation_format` by `get_status`. Compressed storage removes the engine’s temporary WAV after a successful save. **Regenerate** preserves the sound’s format. Existing sounds remain usable in their original format. Windows generation can take longer; do not impose a short generation timeout or promise matching seeds across runtimes.
 
 ## Connect and run an agent job
 
@@ -17,11 +17,11 @@ Prefer the **FX Studio MCP tools** when available:
 
 1. Call `get_status` and `get_prompt_guide`. Check model readiness and the configured export folder.
    For a game, video or other named project, follow the project workflow below before generating.
-2. Call `generate_sound` for one asset, or `create_sound_pack` for **1–8 separate assets**, each with a distinct `asset_name`. Larger projects need batches after jobs finish. Asset names use letters, numbers, underscores and hyphens.
+2. Call `generate_sound` for one asset, or `create_sound_pack` for **1–8 separate assets**, each with a distinct `asset_name`. Larger projects need batches after jobs finish. Asset names use letters, numbers, underscores and hyphens. Set `format="ogg"`, `"wav"` or `"mp3"` on `generate_sound` or each pack asset when the user requests a format; omit it to use the app’s saved Format selection. Choose WAV at generation time when lossless source audio is required.
 3. Give each creation a unique `request_id`. Reuse the **same id and settings** after a transport error to avoid duplicate generation. Use a new id when revising a prompt or settings.
 4. Creation returns immediately. Poll `get_job` / `get_pack` every **2–5 seconds** until `completed`, `failed`, `cancelled` or `interrupted`. Inspect real errors. `cancel_job` / `cancel_pack` stop requested work; finished variants remain saved. Never submit repeated creation calls while waiting.
 5. Use `get_sound` for `audio_path`: this is the **saved crop**. Search results' `path` points to the original. Audition with your available audio tools; if you cannot hear the take, say so. Do not promise a perfect result.
-6. Use `trim_sound` for seconds measured in the original clip; crops apply **5 ms fades**. `export_sound` delivers the current crop. `export_pack` delivers all variants of a completed pack with a prompt/settings/seed/license manifest.
+6. Use `trim_sound` for seconds measured in the original clip; crops apply **5 ms fades**. `export_sound` delivers the current crop. `export_pack` delivers all variants of a completed pack with a prompt/settings/seed/license manifest. Both default to `format="ogg"` and also accept `"wav"` or `"mp3"`. OGG exports the saved crop without regenerating audio.
 7. Exports stay inside the folder the user selects in **Setup**. `folder` is relative; existing files are preserved. Ask the user to change that folder in Setup when needed. Report the returned **actual paths**, retained provenance and whether you auditioned the result.
 
 For agents with terminal access but no MCP, run the installed skill helper:
@@ -30,12 +30,16 @@ For agents with terminal access but no MCP, run the installed skill helper:
 python3 <this-skill-directory>/scripts/fxstudio.py status
 python3 <this-skill-directory>/scripts/fxstudio.py generate '{"request_id":"camera_take_01","settings":{"asset_name":"camera_shutter","prompt":"A DSLR camera shutter firing once. A crisp mechanical snap followed by a tiny spring click, with a compact midrange body and a very fast decay. Recorded close to the mechanism in an acoustically dead room.","seconds":1,"steps":8,"cfg":1,"variants":2}}'
 python3 <this-skill-directory>/scripts/fxstudio.py job <returned-job-id>
-python3 <this-skill-directory>/scripts/fxstudio.py export '{"sound_id":"<returned-sound-id>","name":"camera_shutter_01","format":"wav"}'
+python3 <this-skill-directory>/scripts/fxstudio.py export '{"sound_id":"<returned-sound-id>","name":"camera_shutter_01","format":"ogg"}'
 ```
 
-Replace placeholders and use your shell's proper quoting. JSON may also be passed on stdin: `generate -`, `pack -`, `export -`. `pack` takes `request_id`, `name`, `assets` and optional `project_id`; `get-pack` takes its returned id. Other commands: `guide`, `sound`, `history`, `library`, `cancel`, `cancel-pack`, `trim`, `favorite`, `export-pack`, `projects`, `create-project`, `project`, `update-project`, `project-sound`. Cancellation uses `{"job_id":"..."}` or `{"pack_id":"..."}`. All outputs are JSON; a nonzero exit indicates an error.
+Replace placeholders and use your shell's proper quoting. JSON may also be passed on stdin: `generate -`, `pack -`, `export -`. `pack` takes `request_id`, `name`, `assets` and optional `project_id`; `get-pack` takes its returned id. Other commands: `guide`, `sound`, `history`, `library`, `cancel`, `cancel-pack`, `trim`, `favorite`, `export-pack`, `projects`, `create-project`, `project`, `update-project`, `project-sound`, `project-deletion`, `delete-project`. Cancellation uses `{"job_id":"..."}` or `{"pack_id":"..."}`. All outputs are JSON; a nonzero exit indicates an error.
 
 No separate Python install is required: on macOS use `/Applications/FX Studio.app/Contents/Resources/app/python/bin/python3` to run this helper, or run the adjacent `backend/agent_cli.py` directly. On Windows use `<FX Studio install folder>\resources\app\python\python.exe` and its adjacent `backend\agent_cli.py`. For custom installations set `FX_STUDIO_APP` to the `.app` path or Windows app executable. Never read, echo or copy `agent-access.json` into a prompt or repository; the client reads its private credential automatically.
+
+## Delete a project
+
+Only delete when the user explicitly requests deletion of that exact project. Call `preview_project_deletion(project_id)` first and inspect its counts and blocked jobs. `delete_project(project_id, confirm_name, revision)` requires the exact returned project name and revision. It permanently removes exclusive generated sounds, previous takes, crops, internal drag files and job logs. Finish or cancel affected jobs first. Sounds shared with other projects, the read-only library and files exported outside FX Studio are preserved. CLI equivalents: `project-deletion '{"project_id":"..."}'` and `delete-project '{"project_id":"...","confirm_name":"...","revision":"..."}'`. Never delete projects as routine cleanup.
 
 ## Keep a game's sounds in a project
 
@@ -71,6 +75,7 @@ If desktop control is needed, open `/Applications/FX Studio.app` on Mac or the i
    - Try **2–4 variants** for selection. Leave **Seed** blank for new takes. Keep the same seed and change one detail at a time when comparing prompts or settings.
 4. Click **Generate sound** and watch **Jobs**. Jobs run one at a time; use **Cancel** to stop. Read a failed job's error before retrying.
 5. Find the result under **Your sounds**, **History** or its **Projects** entry. Use **Play sound** to audition, and favorites to retain good takes. Each sound's **Projects** menu adds/removes membership. **Generate again** restores the saved prompt/settings and original generation project; it does not start generation automatically.
+   **Regenerate** starts immediately with a fresh seed and replaces that sound in the same row when ready. It keeps projects, favorites and the saved crop; failed or cancelled attempts keep the previous take. Use this desktop control when the user wants to audition another take without leaving the list.
 
 ## Prompt for clean sounds
 
@@ -110,9 +115,9 @@ Refine the problem you actually hear: room sound → close recording in a dead r
 
 - **Trim:** drag the waveform's left/right handles. **+ / −** zooms up to **16×**; scroll horizontally and use **Fit** for the full view. Focused handles move by **10 ms** with arrows or **1 ms** with Shift.
 - **Fades:** crops apply **5 ms fade-in/out**. Leave space before the attack and after the decay to avoid softening the transient; the minimum selection is **10 ms**.
-- **Export:** wait for the trim to save. Playback, **Save WAV**, **Save MP3** and **Drag audio** all use the saved crop. **Reset trim** restores the original. Prefer WAV for editing; generated WAVs are **44.1 kHz stereo**.
+- **Export:** wait for the trim to save. Playback, **Save WAV**, **Save OGG**, **Save MP3** and **Drag audio** all use the saved crop. **Reset trim** restores the original. Choose **Format** beside Duration and Variants before generating: OGG for smaller files, WAV for lossless storage, MP3 for 320 kbps compressed audio. The choice persists and also supplies the agent default. **Drag audio** delivers the stored format, including the saved crop. Save WAV for editors that require it; conversion to WAV does not recover details discarded by OGG compression.
 - **Editor:** drag using **Drag audio** and check that the destination imported the file. If dropping is unsupported, save the WAV and import it through the editor.
 
 For reference-based generation, choose **Use as reference** on a 0.5–30 s take, then **Reference variation** or **Edit a section**. Lower **Variation strength** stays closer to the source. Section editing may also change audio outside the selected section slightly.
 
-For existing assets, use **Sound library** and retain the displayed origin/license status. Save to the user's destination with clear names such as `camera_shutter_01.wav` and report the actual delivered paths.
+For existing assets, use **Sound library** and retain the displayed origin/license status. Save to the user's destination with clear names such as `camera_shutter_01.ogg` and report the actual delivered paths.

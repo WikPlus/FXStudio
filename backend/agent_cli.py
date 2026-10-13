@@ -9,12 +9,12 @@ def main():
     parser = argparse.ArgumentParser(description='FX Studio local agent API. Generation returns a job id immediately.')
     parser.add_argument('command', choices=['status', 'guide', 'generate', 'pack', 'job', 'get-pack', 'sound',
                                            'history', 'library', 'cancel', 'cancel-pack', 'trim', 'favorite', 'export', 'export-pack',
-                                           'projects', 'create-project', 'project', 'update-project', 'project-sound'])
+                                           'projects', 'create-project', 'project', 'update-project', 'project-sound', 'project-deletion', 'delete-project'])
     parser.add_argument('value', nargs='?', help='Id for job/get-pack/sound; a JSON object for other commands. Use - for JSON on stdin.')
     args = parser.parse_args()
     client = AgentClient()
     routes = {'pack': '/packs', 'get-pack': '/packs/', 'job': '/jobs/', 'sound': '/sounds/',
-              'create-project': '/projects', 'project': '/projects/', 'update-project': '/project-update'}
+              'create-project': '/projects', 'project': '/projects/', 'update-project': '/project-update', 'delete-project': '/project-delete'}
     if args.command in ('job', 'get-pack', 'sound', 'project'):
         if not args.value:
             parser.error('Supply an id.')
@@ -27,7 +27,7 @@ def main():
         if not isinstance(body, dict):
             raise ValueError('Supply a JSON object.')
         route = routes.get(args.command, '/' + args.command)
-        if args.command in ('history', 'library', 'projects'):
+        if args.command in ('history', 'library', 'projects', 'project-deletion'):
             route, body = client.query(route, **body), None
     print(json.dumps(client.request(route, body), ensure_ascii=False))
 

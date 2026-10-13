@@ -100,10 +100,15 @@ class AgentOperationsTests(unittest.TestCase):
         import soundfile as sf
         audio, rate = sf.read(out['sounds'][0]['path'], always_2d=True)
         self.assertEqual(len(audio), round(.2 * rate))
-        self.assertTrue((audio[[0, -1]] == 0).all())
+        self.assertLess(abs(audio[[0, -1]]).max(), .01)
         manifest = json.loads(Path(out['manifest']).read_text())
         self.assertEqual(manifest['sounds'][0]['seed'], 42)
         self.assertIn('Community License', manifest['sounds'][0]['license']['name'])
+        ogg_pack = self.api.export_pack({'pack_id': pack['id'], 'format': 'ogg', 'folder': 'ogg'})
+        ogg_manifest = json.loads(Path(ogg_pack['manifest']).read_text())
+        self.assertEqual(len(ogg_manifest['sounds']), 3)
+        self.assertTrue(all(sound['format'] == 'ogg' and sf.info(sound['path']).subtype == 'VORBIS' for sound in ogg_manifest['sounds']))
+        self.assertEqual(sf.info(ogg_pack['sounds'][0]['path']).frames, round(.2 * 44100))
         with self.assertRaises(FileExistsError):
             self.api.export_pack({'pack_id': pack['id']})
         trimmed = self.api.sound(sound['id'])
@@ -226,7 +231,17 @@ class AgentProtocolTests(unittest.TestCase):
                 tools = await client.list_tools()
                 names = [t.name for t in tools.tools]
                 self.assertIn('create_sound_pack', names)
-                self.assertEqual(len(names), 20)
+                generation_tool = next(t for t in tools.tools if t.name == 'generate_sound')
+                self.assertIn('format', generation_tool.input_schema['properties'])
+                self.assertEqual(len(names), 22)
+                self.assertTrue(next(t for t in tools.tools if t.name == 'delete_project').annotations.destructive_hint)
+                disposable = (await client.call_tool('create_project', {'name': 'Disposable MCP project'})).structured_content
+                preview = await client.call_tool('preview_project_deletion', {'project_id': disposable['id']})
+                self.assertFalse(preview.is_error)
+                blocked_delete = await client.call_tool('delete_project', {'project_id': disposable['id'], 'confirm_name': 'wrong'})
+                self.assertTrue(blocked_delete.is_error)
+                deleted = await client.call_tool('delete_project', {'project_id': disposable['id'], 'confirm_name': disposable['name'], 'revision': preview.structured_content['revision']})
+                self.assertTrue(deleted.structured_content['deleted'])
                 guide = await client.call_tool('get_prompt_guide')
                 self.assertFalse(guide.is_error)
                 self.assertIn('Camera shutter', str(guide.structured_content))
@@ -264,6 +279,28 @@ class AgentProtocolTests(unittest.TestCase):
                 exported = await client.call_tool('export_pack', {'pack_id': pack['id']})
                 self.assertFalse(exported.is_error)
                 self.assertTrue(Path(exported.structured_content['manifest']).is_file())
+                self.assertEqual(exported.structured_content['sounds'][0]['format'], 'ogg')
+                import soundfile as sf
+                self.assertEqual(sf.info(exported.structured_content['sounds'][0]['path']).subtype, 'VORBIS')
+                wav = await client.call_tool('export_sound', {'sound_id': sound['id'], 'name': 'wav_delivery', 'format': 'wav'})
+                self.assertFalse(wav.is_error)
+                self.assertEqual(sf.info(wav.structured_content['path']).format, 'WAV')
+                for explicit, expected in [(True, 'wav'), (False, 'mp3')]:
+                    self.request('POST', '/api/generation-format', {'format': 'mp3'})
+                    arguments = {'request_id': 'mcp_format_' + expected, 'prompt': 'test', 'seconds': .5}
+                    if explicit:
+                        arguments['format'] = expected
+                    generated = await client.call_tool('generate_sound', arguments)
+                    self.assertFalse(generated.is_error)
+                    self.assertEqual(generated.structured_content['settings']['format'], expected)
+                    for _ in range(100):
+                        format_job = (await client.call_tool('get_job', {'job_id': generated.structured_content['id']})).structured_content
+                        if format_job['state'] == 'completed':
+                            break
+                        await asyncio.sleep(.04)
+                    self.assertEqual(format_job['state'], 'completed')
+                    self.assertEqual(sf.info(format_job['sounds'][0]['original_path']).format, expected.upper())
+                self.request('POST', '/api/generation-format', {'format': 'ogg'})
                 self.request('POST', '/api/agents', {'enabled': False})
                 blocked = await client.call_tool('get_status')
                 self.assertTrue(blocked.is_error)
@@ -274,7 +311,7 @@ class AgentProtocolTests(unittest.TestCase):
             # Existing MCP clients use the initialize/initialized handshake.
             async with Client(params, mode='legacy') as legacy:
                 tools = await legacy.list_tools()
-                self.assertEqual(len(tools.tools), 20)
+                self.assertEqual(len(tools.tools), 22)
                 ready = await legacy.call_tool('get_status')
                 self.assertFalse(ready.is_error)
                 self.assertEqual(ready.structured_content['service'], 'fx-studio')

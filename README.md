@@ -8,6 +8,8 @@ A local agent can create a project, generate a named sound pack and export the f
 
 Built by [WIK+DEV](https://wikplus.dev/) · [X / @wik_plus](https://x.com/wik_plus) · [Buy me a coffee](https://buymeacoffee.com/wikplus)
 
+Latest source updates: regenerate a sound in place with a fresh seed, choose OGG/WAV/MP3 directly in Generate, and delete projects with their internal sound files. See the **[changelog](CHANGELOG.md)** for details and validation.
+
 ![FX Studio project with real generated sounds](docs/screenshots/projects.jpg)
 
 Screenshots show real Medium output in a separate demo project.
@@ -15,6 +17,8 @@ Screenshots show real Medium output in a separate demo project.
 ## Download and install
 
 Get the compiled app from **[GitHub Releases](https://github.com/WikPlus/FXStudio/releases)**. GitHub's **Code → Download ZIP** contains source code, not an installed app.
+
+The latest changes on `main` are listed as **Unreleased** in the changelog. Existing v0.1.0 release downloads do not include them; build from source or use a newer release once published.
 
 | Platform | Download | Generation engine | Status |
 | --- | --- | --- | --- |
@@ -64,12 +68,14 @@ The **application source is MIT licensed**. The downloaded model has separate St
 - Generate **0.5–30 second** stereo sound effects at **44.1 kHz**, with 1–4 variants.
 - Create projects for a game, video or asset pack. Review takes with Previous/Next, favorites and search.
 - Play, seek and zoom the real waveform. Drag either edge to trim; crops get automatic **5 ms fades**. The original audio remains available.
-- Drag the **saved crop** into an editor, or export WAV and 320 kbps MP3. Stable drag-export files survive app restarts and later trim changes.
+- Choose **Generate → Format**: smaller OGG Vorbis (quality 5, initially selected), lossless WAV or 320 kbps MP3. The choice persists across restarts and becomes the default for agent generation; agents can override it with `format: "ogg"`, `"wav"` or `"mp3"`. Each queued job keeps its selected format. **Regenerate** preserves the sound’s format.
+- Drag the **saved crop** into an editor, or export WAV, OGG Vorbis (quality 5) and 320 kbps MP3. OGG creates smaller lossy delivery files from the saved crop; new generations are stored in the chosen format. Compressed storage removes the engine’s temporary WAV after a successful save. Dragging a crop keeps the stored format. Existing sounds retain their format. Agent exports default to `format: "ogg"`; WAV/MP3 conversion remains available. Converting OGG to WAV does not restore the discarded detail. Stable drag-export files survive app restarts and later trim changes.
 - Make variations from an existing sound or regenerate a selected section.
+- Click **Regenerate** on a generated sound for a fresh seed with the same prompt and settings. The new take replaces it in place, retaining projects, favorites and its saved crop. You can cancel; failed or cancelled attempts keep the previous take.
 - Queue jobs, see actual progress/errors and cancel generation. One worker runs at a time and releases its model memory when it exits.
 - Use the same workflow from local agents, with named packs, project membership and export manifests.
 
-Sounds, projects, seeds, settings, trims and favorites persist locally. There are no subscriptions, purchase gates, public generation endpoints or cloud agent connections.
+Sounds, projects, seeds, settings, trims and favorites persist locally. In Projects, **Delete project** previews and permanently removes its exclusive generated sounds, previous takes, crops, internal drag files and job logs after confirmation. Sounds shared with other projects, the sound library and external exports are preserved. Finish or cancel affected jobs before deletion. Local agents can use `preview_project_deletion` and `delete_project` for explicitly requested deletion. There are no subscriptions, purchase gates, public generation endpoints or cloud agent connections.
 
 ![Waveform trim and zoom](docs/screenshots/trim.jpg)
 
@@ -117,7 +123,7 @@ The skill includes concrete prompts, settings, project creation, polling, cancel
 
 In Setup, **Copy MCP config** gives standard `mcpServers` JSON; **Copy Codex config** gives TOML for `~/.codex/config.toml`. Paste the generated configuration into the local client's MCP settings, then reload it. Paths are specific to where you installed the app. The stdio adapter reads its local private credential automatically; never paste an API key into a prompt or public configuration.
 
-There are **20 tools**: status and prompt guide; sound/pack generation, polling and cancellation; history/library search; sound inspection, trimming, favorites and exports; project creation, updates and sound membership. The guide is also exposed as `fxstudio://guide`.
+There are **22 tools**: status and prompt guide; sound/pack generation, polling and cancellation; history/library search; sound inspection, trimming, favorites and exports; project creation, updates, sound membership and confirmed project deletion. The guide is also exposed as `fxstudio://guide`.
 
 Agent-created jobs appear in the desktop queue. Pack creation returns immediately; poll the returned IDs. Finished takes are saved in the selected project, and exported packs include a manifest with prompts, settings, seeds, trims and provenance.
 

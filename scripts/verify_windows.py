@@ -42,6 +42,8 @@ try:
     assert np.isfinite(audio).all() and (audio[[0,-1]]==0).all()
     mp3=folder/'crop.mp3';studio.convert(Path(dragged['path']),mp3,'mp3')
     decoded=folder/'decoded.wav';studio.convert(mp3,decoded,'wav')
+    ogg=folder/'crop.ogg';studio.convert(studio.media_path('SFX0001'),ogg,'ogg')
+    assert sf.info(ogg).subtype=='VORBIS' and sf.info(ogg).frames==8820
     check,rate=sf.read(decoded,always_2d=True)
     assert mp3.stat().st_size>1000 and rate==44100 and check.shape[1]==2 and np.isfinite(check).all()
     report={'platform':'win32','standalone':True,'runtime':'Official LiteRT CPU','trim_export_drag_path':True,'mp3_roundtrip':True,'model_generation':'not_run','synthetic_audio_used_only_for_smoke':True}
@@ -61,6 +63,8 @@ try:
         item=studio.items(job_id=job_id)[0]
         audio,rate=sf.read(item['path'],always_2d=True)
         assert rate==44100 and audio.shape==(44100,2) and np.isfinite(audio).all()
+        assert Path(item['path']).suffix=='.ogg' and sf.info(item['path']).subtype=='VORBIS'
+        assert not list(studio.audio.glob('*.wav'))
         assert np.max(np.abs(audio))>.001
         studio.convert(Path(item['path']),folder/'real-medium.mp3','mp3')
         report.update(model_generation='passed',generation_seconds=round(time.monotonic()-started,2),sample_rate=rate,peak=float(np.max(np.abs(audio))))
@@ -99,7 +103,7 @@ with (folder/'service-output.txt').open('w') as log:
                 args=['-s','-B',str(app/'backend/mcp_server.py')],
                 env={**env,'FX_AGENT_NO_LAUNCH':'1'},cwd=str(folder))
             async with Client(params) as client:
-                tools=await client.list_tools();assert len(tools.tools)==20
+                tools=await client.list_tools();assert len(tools.tools)==22
                 state=await client.call_tool('get_status')
                 assert not state.is_error and state.structured_content['ready']
                 guide=await client.call_tool('get_prompt_guide')

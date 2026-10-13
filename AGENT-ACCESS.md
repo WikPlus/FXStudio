@@ -21,7 +21,7 @@ On Windows x64, use `<install folder>\resources\app\python\python.exe` and `<ins
 
 ## Tools and workflow
 
-The MCP server exposes 20 tools: `get_status`, `get_prompt_guide`, `generate_sound`, `create_sound_pack`, `get_job`, `get_pack`, `cancel_job`, `cancel_pack`, `search_sounds`, `search_library`, `get_sound`, `trim_sound`, `set_favorite`, `export_sound`, `export_pack`, `list_projects`, `create_project`, `get_project`, `update_project`, `set_project_sound`. The English guide is also available as `fxstudio://guide`.
+The MCP server exposes 22 tools: `get_status`, `get_prompt_guide`, `generate_sound`, `create_sound_pack`, `get_job`, `get_pack`, `cancel_job`, `cancel_pack`, `search_sounds`, `search_library`, `get_sound`, `trim_sound`, `set_favorite`, `export_sound`, `export_pack`, `list_projects`, `create_project`, `get_project`, `update_project`, `set_project_sound`, `preview_project_deletion`, `delete_project`. The English guide is also available as `fxstudio://guide`.
 
 Creation returns job/pack ids immediately. Poll every 2–5 seconds rather than holding a tool call open for the full generation. States are `queued`, `running`, `cancelling`, `completed`, `failed`, `cancelled`, `interrupted`; a pack with terminal failures or cancellations is `incomplete`. Jobs appear in the desktop queue with **Agent** and their results are saved in its history. The serial worker releases model memory between variants. There is no generation timeout.
 
@@ -29,9 +29,13 @@ For a game or named edit, find it with `list_projects` or create it with `create
 
 Create packs with 1–8 assets; each has a distinct filename-safe `asset_name` and a prompt. The whole pack is validated and stored atomically. The app has eight active queue slots, including desktop jobs; larger projects need batches. Every creation requires a unique `request_id`. Repeating it with identical input retrieves the same ids, including after app restart. Reusing it with different input returns a conflict.
 
+Generation accepts `format: "ogg"`, `"wav"` or `"mp3"` on one sound's settings or each pack asset. If omitted, it uses the persisted **Generate → Format** selection, initially OGG. `get_status.generation_format` reports that default. OGG uses Vorbis quality 5, WAV keeps lossless PCM and MP3 uses 320 kbps. The queued job captures its format; changing the default does not change queued or existing sounds. Playback and drag use the saved format, including trims. Choose WAV during generation when lossless source audio is needed; converting a compressed source to WAV cannot restore discarded detail.
+
+For an explicitly requested project deletion, call `preview_project_deletion` first. Inspect exclusive sounds, internal files/bytes and active-job blockers, then pass the exact returned project name and revision to `delete_project`. This permanently removes the project and its exclusive generated sounds, archived takes, crops, internal drag files and associated logs. Shared sounds, library files and external exports remain. Finish or cancel affected jobs before deletion. Repeating a creation request whose results were deleted reports a conflict instead of silently recreating those sounds.
+
 Use concrete English prompts from the [bundled skill](ui/skills/fx-studio/SKILL.md). Start at eight steps / CFG 1; select from variants and audition rather than claiming guaranteed quality. `get_sound.audio_path` points to the saved crop. Search result `path` points to the original. Crop bounds are measured in the original audio and apply the same 5 ms fades as desktop trimming.
 
-Exports write only inside the folder chosen in Setup, with relative subfolders and safe filenames. WAV/MP3 exports use the saved crop; existing files are preserved. A completed pack exports all variants plus `manifest.json`, with paths, prompts, settings, seeds, trims and source/license/reference metadata and project membership. An incomplete pack can export its finished sounds individually. Historical removed models retain their original model identity. The external library is read-only and retains documented or unknown license status.
+Exports write only inside the folder chosen in Setup, with relative subfolders and safe filenames. OGG/WAV/MP3 exports use the saved crop; existing files are preserved. Exports default to OGG; specify `format` to choose WAV or MP3 independently of the stored sound's format. A completed pack exports all variants plus `manifest.json`, with paths, prompts, settings, seeds, trims and source/license/reference metadata and project membership. An incomplete pack can export its finished sounds individually. Historical removed models retain their original model identity. The external library is read-only and retains documented or unknown license status.
 
 ## HTTP API and CLI
 
@@ -47,16 +51,18 @@ HTTP base: `http://127.0.0.1:3921/agent/v1`. Send `Authorization: Bearer <local 
 | POST | `/projects` | `name`, optional `description`; reuse existing name on retry |
 | POST | `/project-update` | `project_id`, optional `name`, `description` |
 | POST | `/project-sound` | `project_id`, `sound_id`, `included: true/false` |
+| GET | `/project-deletion` | `project_id`; returns counts, blockers, exact name and revision |
+| POST | `/project-delete` | `project_id`, `confirm_name`, `revision` from the preview |
 | GET | `/audio/{sound_id}` | Current crop; supports byte ranges |
-| POST | `/generate` | `request_id`, `settings` (optional `project_id` inside settings) |
-| POST | `/packs` | `request_id`, `name`, `assets`, optional `project_id` applying to all assets |
+| POST | `/generate` | `request_id`, `settings` (optional `project_id`, `format: ogg/wav/mp3` inside settings) |
+| POST | `/packs` | `request_id`, `name`, `assets` (each can choose `format`), optional `project_id` applying to all assets |
 | POST | `/cancel`, `/cancel-pack` | `job_id` or `pack_id` |
 | POST | `/trim` | `sound_id`, `start`, `end`, or `reset: true` |
 | POST | `/favorite` | `sound_id`, `favorite: true/false` |
 | POST | `/export` | `sound_id`, optional `name`, `format`, `folder` |
 | POST | `/export-pack` | `pack_id`, optional `format`, `folder` |
 
-The CLI commands are `status`, `guide`, `generate`, `pack`, `job`, `get-pack`, `sound`, `history`, `library`, `cancel`, `cancel-pack`, `trim`, `favorite`, `export`, `export-pack`, `projects`, `create-project`, `project`, `update-project`, `project-sound`. `project` takes the returned project id. Id commands take an id; other commands take a JSON object argument or `-` to read it from stdin. Results are JSON; errors return a nonzero process exit. See the skill for complete examples. There is no separate CLI or MCP process calculating audio.
+The CLI commands are `status`, `guide`, `generate`, `pack`, `job`, `get-pack`, `sound`, `history`, `library`, `cancel`, `cancel-pack`, `trim`, `favorite`, `export`, `export-pack`, `projects`, `create-project`, `project`, `update-project`, `project-sound`, `project-deletion`, `delete-project`. `project` takes the returned project id. Id commands take an id; other commands take a JSON object argument or `-` to read it from stdin. Results are JSON; errors return a nonzero process exit. See the skill for complete examples. There is no separate CLI or MCP process calculating audio.
 
 The owner-private `agent-access.json` lives alongside the app's database in its own data directory. New installations start with access off. Disable access in Setup to reject subsequent agent calls; this does not cancel previously accepted jobs. Resetting the key invalidates manually copied keys; the bundled clients read the new key on every request. API credentials and generated sounds are excluded from Git and from the agent kit.
 

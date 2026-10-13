@@ -1,0 +1,57 @@
+{
+  "platform": "darwin",
+  "tests": 89,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "passed": true,
+  "real_model_generation": false,
+  "personal_library_used": false,
+  "native_bundle": {
+    "standalone": true,
+    "metal": true,
+    "model": "medium",
+    "generation_seconds": 6.06,
+    "sample_rate": 44100,
+    "frames": 44100,
+    "channels": 2,
+    "peak": 0.33142,
+    "ogg_bytes": 14120,
+    "wav_16bit_pcm_bytes": 176444,
+    "storage": "OGG Vorbis",
+    "temporary_wav_removed": true,
+    "ogg_crop_and_drag": true,
+    "mp3_bytes": 42884,
+    "history_is_temporary": true,
+    "generation_formats": [
+      {
+        "format": "ogg",
+        "bytes": 14120,
+        "generation_seconds": 6.06
+      },
+      {
+        "format": "wav",
+        "bytes": 176444,
+        "generation_seconds": 5.16
+      },
+      {
+        "format": "mp3",
+        "bytes": 42884,
+        "generation_seconds": 4.96
+      }
+    ],
+    "all_crops_and_drag_formats": true
+  },
+  "electron_ui": {
+    "passed": true,
+    "formats": [
+      "ogg",
+      "wav",
+      "mp3"
+    ],
+    "storage_and_playback": true,
+    "drag_formats": true,
+    "persisted_after_reload": true,
+    "reuse_preserves_format": true
+  }
+}

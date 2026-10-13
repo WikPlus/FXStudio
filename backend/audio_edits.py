@@ -49,8 +49,9 @@ def render_trim(source, target, trim):
             fade = min(max(2, round(reader.samplerate * FADE_MS / 1000)), count // 2)
             subtype = reader.subtype if reader.subtype in ('PCM_16', 'PCM_24', 'PCM_32', 'FLOAT', 'DOUBLE') else 'PCM_16'
             reader.seek(first)
+            encoding = {'format': 'OGG', 'subtype': 'VORBIS', 'compression_level': .5} if target.suffix.lower() == '.ogg' else {'format': 'WAV', 'subtype': subtype}
             with sf.SoundFile(str(partial), 'w', samplerate=reader.samplerate,
-                              channels=reader.channels, format='WAV', subtype=subtype) as writer:
+                              channels=reader.channels, **encoding) as writer:
                 offset = 0
                 while offset < count:
                     samples = reader.read(min(65536, count - offset), dtype='float64', always_2d=True)

@@ -47,8 +47,7 @@ try:
  report['atmosphere']=check(atmosphere)
  item=report['recovery_variants']['items'][0];s.favorite(item['id'],True)
  export=s.data/'acceptance-exports';export.mkdir(exist_ok=True)
- import shutil
- wav=export/'Game-Boost.wav';shutil.copyfile(item['path'],wav)
+ wav=export/'Game-Boost.wav';s.convert(item['path'],wav,'wav')
  mp3=export/'Game-Boost.mp3';s.convert(item['path'],mp3,'mp3')
  info=sf.info(str(mp3));assert abs(info.duration-item['duration'])<.06 and info.frames>0
  report['exports']={'wav':str(wav),'mp3':str(mp3),'mp3_duration':info.duration,'wav_bytes':wav.stat().st_size,'mp3_bytes':mp3.stat().st_size}

@@ -12,6 +12,7 @@ audio/
 exports/
 *.wav
 *.mp3
+*.ogg
 *.npz
 *.safetensors
 *.tflite

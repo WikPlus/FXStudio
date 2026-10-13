@@ -47,10 +47,12 @@
 <button type="button" data-example="rain">Rain</button>
 <button type="button" data-example="cave">Dark cave</button>
 </div>
-<div class="parameter-row">
+<div class="parameter-row generation-parameters">
 <label>Duration <div class="unit-field"><input id="seconds" type="number" value="3" min="0.5" max="30" step="any" required><span>seconds</span></div></label>
 <label>Variants <select id="variants"><option value="1">1 sound</option><option value="2">2 sounds</option><option value="3">3 sounds</option><option value="4">4 sounds</option></select></label>
+<label>Format <select id="format" aria-describedby="format-hint" required><option value="ogg">OGG · smaller files</option><option value="wav">WAV · lossless</option><option value="mp3">MP3 · 320 kbps</option></select></label>
 </div>
+<p id="format-hint" class="field-hint">Smaller OGG files. Also used by agents unless they specify a format.</p>
 <details id="advanced"><summary>Advanced settings</summary><div class="advanced-grid">
 <label>Seed <input id="seed" type="number" min="0" max="2147483644" step="1" placeholder="Random"></label>
 <label>Sampling steps <input id="steps" type="number" value="8" min="1" max="16" step="1" required></label>
@@ -63,7 +65,7 @@
 <section id="projects" hidden>
 <div class="project-toolbar"><label>Project<select id="project-picker"><option value="">Choose a project</option></select></label><button type="button" id="new-project">New project</button></div>
 <form id="project-form" hidden><h2 id="project-form-title">New project</h2><label>Project name<input id="project-name" maxlength="80" required placeholder="For example: My game"></label><label>Description <span class="optional">(optional)</span><textarea id="project-description" maxlength="1000" rows="2" placeholder="What is this project for?"></textarea></label><div class="project-form-actions"><button class="primary" type="submit" id="save-project">Create project</button><button type="button" id="cancel-project-form">Cancel</button></div></form>
-<div id="project-detail" hidden><div class="project-heading"><div><h2 id="project-title"></h2><p id="project-description-text"></p><p id="project-count" class="field-hint" aria-live="polite"></p></div><button type="button" id="edit-project">Edit project</button></div><div class="project-review"><button type="button" id="generate-in-project" class="primary">Generate for this project</button><span class="spacer"></span><button type="button" id="previous-sound" disabled>Previous sound</button><button type="button" id="next-sound" disabled>Next sound</button></div><p class="field-hint">Listen with each sound’s play button or use Previous / Next sound. Trims and favorites are shared across projects.</p></div>
+<div id="project-detail" hidden><div class="project-heading"><div><h2 id="project-title"></h2><p id="project-description-text"></p><p id="project-count" class="field-hint" aria-live="polite"></p></div><div class="project-buttons"><button type="button" id="edit-project">Edit project</button><button type="button" id="delete-project">Delete project</button></div></div><div class="project-review"><button type="button" id="generate-in-project" class="primary">Generate for this project</button><span class="spacer"></span><button type="button" id="previous-sound" disabled>Previous sound</button><button type="button" id="next-sound" disabled>Next sound</button></div><p class="field-hint">Listen with each sound’s play button or use Previous / Next sound. Trims and favorites are shared across projects.</p></div>
 </section>
 <section id="queue-section" hidden><h2>Jobs</h2><div id="queue"></div></section>
 <section id="setup" hidden></section>

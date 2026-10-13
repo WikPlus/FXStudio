@@ -12,6 +12,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import zipfile
@@ -20,6 +21,7 @@ from models import DEFAULT_MODEL, MODELS, generation_prompt, selected_model, wei
 from runtime_paths import default_data_dir, ffmpeg_binary, library_folder, link_cached_models, model_folder, runtime_folder, runtime_kind
 from processes import process_options, terminate_tree
 from audio_edits import trim_bounds, render_trim
+from audio_exports import ogg_available, export_ogg
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE = ('queued', 'running', 'cancelling')
@@ -58,9 +60,12 @@ class Studio:
         CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, description TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS project_sounds (project_id TEXT NOT NULL, sound_id TEXT NOT NULL, added REAL NOT NULL, PRIMARY KEY(project_id,sound_id));
         CREATE INDEX IF NOT EXISTS project_sounds_sound ON project_sounds(sound_id);
+        CREATE TABLE IF NOT EXISTS sound_revisions (id INTEGER PRIMARY KEY, sound_id TEXT NOT NULL, item TEXT NOT NULL, trim TEXT, replaced REAL NOT NULL);
         ''')
         self.db.execute("UPDATE jobs SET state='interrupted', finished=?, error='The app closed during this job. You can start it again.' WHERE state IN ('queued','running','cancelling')", (time.time(),))
         self.db.commit()
+        from project_cleanup import recover_deletions
+        recover_deletions(self)
         try:
             english_titles = dict(line.split('\t', 1) for line in (ROOT / 'backend/library_titles_en.tsv').read_text(encoding='utf-8').splitlines() if line)
             catalog = json.loads((self.library_root / 'katalog.json').read_text(encoding='utf-8'))
@@ -107,7 +112,26 @@ class Studio:
         for job in jobs:
             job['settings'] = json.loads(job['settings'])
             job['elapsed'] = round((job['finished'] or time.time()) - (job['started'] or job['created']), 1)
-        return {'ready': True, 'service': 'fx-studio', 'version': '0.1.0', 'packaged': os.environ.get('FX_PACKAGED_RUNTIME') == '1', 'platform': sys.platform, 'model': self.model_status(), 'models': [self.model_status(model_id) for model_id in MODELS], 'setup': self.setup_state.copy(), 'jobs': jobs, 'projects': self.projects(), 'library_count': len(self.library), 'library_root': str(self.library_root.resolve()), 'library_error': self.library_error, 'export_mp3': bool(ffmpeg_binary()), 'data_dir': str(self.data), 'free_gb': round(shutil.disk_usage(self.data).free / 1024 ** 3, 1)}
+        return {'ready': True, 'service': 'fx-studio', 'version': '0.1.0', 'packaged': os.environ.get('FX_PACKAGED_RUNTIME') == '1', 'platform': sys.platform, 'model': self.model_status(), 'models': [self.model_status(model_id) for model_id in MODELS], 'setup': self.setup_state.copy(), 'jobs': jobs, 'projects': self.projects(), 'library_count': len(self.library), 'library_root': str(self.library_root.resolve()), 'library_error': self.library_error, 'export_mp3': bool(ffmpeg_binary()), 'export_ogg': ogg_available(), 'generation_format': self.generation_format(), 'data_dir': str(self.data), 'free_gb': round(shutil.disk_usage(self.data).free / 1024 ** 3, 1)}
+
+    def generation_format(self):
+        rows = self.rows("SELECT value FROM app_settings WHERE key='generation-format'")
+        return rows[0]['value'] if rows and rows[0]['value'] in ('ogg', 'wav', 'mp3') else 'ogg'
+
+    @staticmethod
+    def validate_format(format):
+        if not isinstance(format, str) or format not in ('ogg', 'wav', 'mp3'):
+            raise ValueError('Choose OGG, WAV or MP3.')
+        if format == 'ogg' and not ogg_available():
+            raise ValueError('The OGG encoder is unavailable. Choose WAV or reinstall FX Studio.')
+        if format == 'mp3' and not ffmpeg_binary():
+            raise ValueError('The MP3 encoder is unavailable. Choose WAV or reinstall FX Studio.')
+        return format
+
+    def set_generation_format(self, format):
+        format = self.validate_format(format)
+        self.execute('INSERT OR REPLACE INTO app_settings VALUES(?,?)', ('generation-format', format))
+        return {'generation_format': format}
 
     def validate(self, raw):
         if not isinstance(raw, dict):
@@ -130,6 +154,7 @@ class Studio:
         model_id = raw.get('model', DEFAULT_MODEL)
         model = selected_model(model_id)
         settings = {'model': model_id, 'prompt': prompt, 'seconds': number('seconds', 3, .5, model['max_seconds']), 'variants': number('variants', 1, 1, 4, True), 'steps': number('steps', model['default_steps'], 1, model['max_steps'], True), 'cfg': number('cfg', model['default_cfg'], 0, 10), 'seed': secrets.randbelow(2 ** 31 - 4) if seed is None or seed == '' else number('seed', 0, 0, 2 ** 31 - 4, True), 'negative_prompt': str(raw.get('negative_prompt', '')).strip()[:2000], 'mode': str(raw.get('mode', 'text'))}
+        settings['format'] = self.validate_format(raw.get('format', self.generation_format()))
         if raw.get('project_id') not in (None, ''):
             settings['project_id'] = self.project(raw['project_id'])['id']
         if settings['mode'] not in ('text', 'variation', 'inpaint'):
@@ -149,6 +174,38 @@ class Studio:
 
     def enqueue(self, raw):
         return self.enqueue_many([raw])[0]
+
+    def regenerate(self, item_id):
+        """Replace one generated sound only after a successful new take is ready."""
+        with self.render_lock, self.lock:
+            item = self.item(item_id)
+            if item['kind'] != 'generated':
+                raise ValueError('Only generated sounds can be regenerated.')
+            pending = self.rows("SELECT id,settings FROM jobs WHERE json_extract(settings,'$.replace_id')=? AND state IN ('queued','running','cancelling')", (item_id,))
+            if pending:
+                return {'id': pending[0]['id'], 'settings': json.loads(pending[0]['settings'])}
+            raw = item['settings'].copy()
+            # Earlier takes were regenerated as OGG before formats were selectable.
+            raw.setdefault('format', 'ogg')
+            if raw.get('model') != DEFAULT_MODEL:
+                raw.update(model=DEFAULT_MODEL, steps=MODELS[DEFAULT_MODEL]['default_steps'], cfg=MODELS[DEFAULT_MODEL]['default_cfg'])
+            used = {item['seed']} | {row['seed'] for row in self.rows("SELECT json_extract(settings,'$.seed') AS seed FROM jobs WHERE json_extract(settings,'$.replace_id')=?", (item_id,))}
+            used.update(row['seed'] for row in self.rows("SELECT json_extract(item,'$.seed') AS seed FROM sound_revisions WHERE sound_id=?", (item_id,)))
+            seed = secrets.randbelow(2 ** 31 - 4)
+            while seed in used:
+                seed = (seed + 1) % (2 ** 31 - 4)
+            raw.update(seed=seed, variants=1)
+            raw.pop('project_id', None)
+            if item['projects']:
+                raw['project_id'] = item['projects'][0]['id']
+            def replacement(results):
+                settings = results[0]['settings']
+                settings['replace_id'] = item_id
+                for key in ('origin', 'asset_name'):
+                    if key in raw:
+                        settings[key] = raw[key]
+                self.db.execute('UPDATE jobs SET settings=? WHERE id=?', (json.dumps(settings), results[0]['id']))
+            return self.enqueue_many([raw], persist=replacement)[0]
 
     def enqueue_many(self, requests, origin='desktop', persist=None):
         """Validate and save a whole pack atomically, on the shared serial queue."""
@@ -174,6 +231,11 @@ class Studio:
             results = []
             try:
                 for settings in settings_list:
+                    # Validation ran outside this lock; deletion may have intervened.
+                    if settings.get('project_id'):
+                        self.project(settings['project_id'])
+                    if settings.get('reference_id'):
+                        self.item(settings['reference_id'])
                     job_id = secrets.token_hex(6)
                     self.db.execute('INSERT INTO jobs(id,settings,state,created) VALUES(?,?,?,?)', (job_id, json.dumps(settings), 'queued', time.time()))
                     results.append({'id': job_id, 'settings': settings})
@@ -287,21 +349,38 @@ class Studio:
                     info = sf.info(str(target))
                     if info.frames <= 0 or abs(info.duration - settings['seconds']) > .05:
                         raise RuntimeError('The engine did not produce a complete audio file.')
+                    format = settings.get('format', 'ogg')
+                    self.execute('UPDATE jobs SET message=? WHERE id=?', ('Saving ' + format.upper() + ' audio …', job['id']))
+                    stored = target.with_suffix('.' + format)
+                    if stored != target:
+                        temporary.append(stored)
+                        self.convert(target, stored, format)
+                        saved = sf.info(str(stored))
+                        if saved.frames <= 0 or abs(saved.duration - info.duration) > .05:
+                            raise RuntimeError('The audio encoder did not produce a complete file.')
                     title = settings.get('asset_name') or settings['prompt'].split('.')[0][:75]
                     if settings['variants'] > 1:
                         title += f' · {variant + 1}'
-                    with self.lock:
+                    with self.render_lock, self.lock:
                         if self.is_cancelled(job['id']):
                             break
-                        self.db.execute('INSERT INTO items(id,job_id,title,prompt,settings,seed,path,created,duration,variant) VALUES(?,?,?,?,?,?,?,?,?,?)', (item_id, job['id'], title, settings['prompt'], json.dumps({**settings, 'seed': seed, 'variants': 1}), seed, str(target), time.time(), info.duration, variant + 1))
-                        if settings.get('project_id'):
+                        if settings.get('replace_id'):
+                            self.replace_sound(settings['replace_id'], settings, seed, stored, info.duration)
+                        else:
+                            self.db.execute('INSERT INTO items(id,job_id,title,prompt,settings,seed,path,created,duration,variant) VALUES(?,?,?,?,?,?,?,?,?,?)', (item_id, job['id'], title, settings['prompt'], json.dumps({**settings, 'seed': seed, 'variants': 1}), seed, str(stored), time.time(), info.duration, variant + 1))
+                        if settings.get('project_id') and not settings.get('replace_id'):
                             self.db.execute('INSERT INTO project_sounds VALUES(?,?,?)', (settings['project_id'], item_id, time.time()))
                             self.db.execute('UPDATE projects SET updated=? WHERE id=?', (time.time(), settings['project_id']))
                         self.db.commit()
-                    temporary.remove(target)
+                    temporary.remove(stored)
+                    if stored != target:
+                        target.unlink(missing_ok=True)
+                        temporary.remove(target)
                 cancelled = self.is_cancelled(job['id'])
                 self.execute('UPDATE jobs SET state=?, finished=?, message=? WHERE id=?', ('cancelled' if cancelled else 'completed', time.time(), 'Cancelled · finished variants are kept' if cancelled else 'Done', job['id']))
             except Exception as error:
+                with self.lock:
+                    self.db.rollback()
                 if self.process:
                     self.terminate(self.process)
                     self.process.wait()
@@ -322,6 +401,25 @@ class Studio:
         if event.get('step'):
             text += f" · Step {event['step']}/{event['total']}"
         return text
+
+    def replace_sound(self, item_id, settings, seed, target, seconds):
+        old = self.rows('SELECT * FROM items WHERE id=?', (item_id,))
+        if not old:
+            raise KeyError('The sound to replace no longer exists.')
+        trim = self.rows('SELECT * FROM sound_trims WHERE item_id=?', (item_id,))
+        # Prepare the existing crop before touching the saved sound. A failed
+        # render, cancellation or generation leaves the previous take usable.
+        if trim:
+            bounds = {**trim[0], 'end': min(trim[0]['end'], seconds), 'source_duration': seconds, 'fade_ms': 5}
+            self.rendered_path({'id': item_id, 'path': str(target)}, bounds)
+        self.db.execute('INSERT INTO sound_revisions(sound_id,item,trim,replaced) VALUES(?,?,?,?)',
+                        (item_id, json.dumps(old[0]), json.dumps(trim[0]) if trim else None, time.time()))
+        saved = {key: value for key, value in settings.items() if key != 'replace_id'}
+        self.db.execute('UPDATE items SET prompt=?,settings=?,seed=?,path=?,duration=? WHERE id=?',
+                        (settings['prompt'], json.dumps({**saved, 'seed': seed, 'variants': 1}), seed, str(target), seconds, item_id))
+        if trim:
+            self.db.execute('UPDATE sound_trims SET end=?,source_duration=?,updated=? WHERE item_id=?',
+                            (bounds['end'], seconds, time.time(), item_id))
 
     def item(self, item_id):
         if item_id in self.library:
@@ -345,6 +443,8 @@ class Studio:
                 item['reference'] = {**source[0], 'kind': 'generated'}
         item['kind'] = 'generated'
         item['missing'] = not Path(item['path']).is_file()
+        regeneration = self.rows("SELECT id,state,created,started,finished,message,error FROM jobs WHERE json_extract(settings,'$.replace_id')=? ORDER BY created DESC LIMIT 1", (item_id,))
+        item['regeneration'] = regeneration[0] if regeneration else None
         return self.with_trim(item)
 
     def with_trim(self, item):
@@ -385,10 +485,19 @@ class Studio:
         digest = hashlib.sha256(key.encode()).hexdigest()[:16]
         folder = self.data / 'edits'
         folder.mkdir(exist_ok=True)
-        target = folder / (item['id'] + '-' + digest + '.wav')
+        extension = source.suffix.lower() if source.suffix.lower() in ('.ogg', '.mp3') else '.wav'
+        target = folder / (item['id'] + '-' + digest + extension)
         with self.render_lock:
             if not target.is_file():
-                render_trim(source, target, trim)
+                if extension == '.mp3':
+                    # Apply fades in PCM, then atomically publish the encoded crop.
+                    with tempfile.TemporaryDirectory(prefix='.fx-trim-', dir=folder) as temp:
+                        pcm, encoded = Path(temp) / 'crop.wav', Path(temp) / 'crop.mp3'
+                        render_trim(source, pcm, trim)
+                        self.convert(pcm, encoded, 'mp3')
+                        os.replace(encoded, target)
+                else:
+                    render_trim(source, target, trim)
         return target
 
     def media_path(self, item_id):
@@ -407,7 +516,7 @@ class Studio:
         folder = self.data / 'drag-exports'
         folder.mkdir(exist_ok=True)
         title = re.sub(r'[\\/:\x00-\x1f<>"|?*]', '-', item['title']).strip(' .')[:80] or 'FX Studio Sound'
-        revision = source.stem if item['trim'] else item_id
+        revision = source.stem
         target = folder / (title + '--' + revision + source.suffix)
         with self.render_lock:
             if not target.is_file():
@@ -460,6 +569,15 @@ class Studio:
                 raise ValueError('A project with that name already exists. Choose another name.')
             self.execute('UPDATE projects SET name=?,name_key=?,description=?,updated=? WHERE id=?', (name, name.casefold(), description, time.time(), project_id))
             return self.project(project_id)
+
+    def project_deletion(self, project_id):
+        from project_cleanup import deletion_plan
+        with self.render_lock, self.lock:
+            return deletion_plan(self, project_id)[0]
+
+    def delete_project(self, project_id, raw):
+        from project_cleanup import delete_project
+        return delete_project(self, project_id, raw)
 
     def set_project_sound(self, project_id, sound_id, included=True):
         if not isinstance(included, bool):
@@ -525,6 +643,13 @@ class Studio:
 
     @staticmethod
     def convert(source, target, format):
+        if format not in ('wav', 'mp3', 'ogg'):
+            raise ValueError('Choose WAV, OGG or MP3.')
+        if Path(source).resolve() == Path(target).resolve():
+            raise ValueError('Export to a different file to preserve the original audio.')
+        if format == 'ogg':
+            export_ogg(source, target)
+            return
         ffmpeg = ffmpeg_binary()
         if not ffmpeg:
             raise ValueError('FFmpeg is required for this conversion. Install it and restart the app.')

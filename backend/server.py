@@ -149,6 +149,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond({'items': STUDIO.items(get('q'), get('favorites') == '1', get('job') or None)})
             elif path == '/api/projects':
                 self.respond({'projects': STUDIO.projects(get('q'))})
+            elif path == '/api/project-deletion':
+                self.respond(STUDIO.project_deletion(get('project_id')))
             elif path.startswith('/api/projects/'):
                 project_id = path.rsplit('/', 1)[-1]
                 self.respond({**STUDIO.project(project_id), 'items': STUDIO.project_items(project_id, get('q')), 'jobs': STUDIO.project_jobs(project_id)})
@@ -169,9 +171,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path.startswith('/api/export/'):
                 item = STUDIO.item(path.rsplit('/', 1)[-1])
                 source = STUDIO.media_path(item['id'])
-                format = get('format', 'wav')
-                if format not in ('wav', 'mp3'):
-                    raise ValueError('Choose WAV or MP3.')
+                format = get('format', 'ogg')
+                if format not in ('wav', 'mp3', 'ogg'):
+                    raise ValueError('Choose WAV, OGG or MP3.')
                 if source.suffix == '.' + format:
                     self.file(source, True)
                 else:
@@ -213,12 +215,18 @@ class Handler(BaseHTTPRequestHandler):
             path = urllib.parse.urlparse(self.path).path
             if path == '/api/generate':
                 self.respond(STUDIO.enqueue(data), 202)
+            elif path == '/api/generation-format':
+                self.respond(STUDIO.set_generation_format(data.get('format')))
+            elif path.startswith('/api/regenerate/'):
+                self.respond(STUDIO.regenerate(path.rsplit('/', 1)[-1]), 202)
             elif path == '/api/agents':
                 self.respond(ACCESS.configure(data, STUDIO))
             elif path == '/api/projects':
                 self.respond(STUDIO.create_project(data))
             elif path == '/api/project-update':
                 self.respond(STUDIO.update_project(data['project_id'], data))
+            elif path == '/api/project-delete':
+                self.respond(STUDIO.delete_project(data['project_id'], data))
             elif path == '/api/project-sound':
                 self.respond(STUDIO.set_project_sound(data['project_id'], data['sound_id'], data.get('included', True)))
             elif path.startswith('/agent/v1/'):

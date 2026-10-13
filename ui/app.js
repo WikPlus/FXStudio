@@ -23,7 +23,8 @@ let view='generate',status=null,items=[],shown=30,currentJob=null,lastMediaSigna
 let reference=null;
 let projectId='',projectJobs=[],projectFormId=null,projectsSignature='',pendingGenerationProject='';
 try{projectId=localStorage.getItem('fx-project')||''}catch{}
-const baseFields=['project_id','model','prompt','seconds','variants','seed','steps','cfg','negative_prompt'];
+const baseFields=['project_id','model','prompt','seconds','variants','format','seed','steps','cfg','negative_prompt'];
+let formatInitialized=false,formatSaving=false;
 const editingFields=['mode','strength','start','end'];
 function selectedModel(){return status?.models.find(model=>model.id===$('#model').value);}
 // Names and source links remain available for saved sounds from removed models.
@@ -83,6 +84,18 @@ $('#project-picker').addEventListener('change',event=>{audio.pause();$('#project
 $('#new-project').addEventListener('click',()=>openProjectForm(false));
 $('#create-generation-project').addEventListener('click',()=>{showView('projects');openProjectForm(false)});
 $('#edit-project').addEventListener('click',()=>openProjectForm(true));
+$('#delete-project').addEventListener('click',async()=>{
+ const button=$('#delete-project'),id=projectId;button.disabled=true;
+ try{
+  const result=await window.fxDesktop.deleteProject(id);if(result.cancelled)return;
+  audio.pause();audio.removeAttribute('src');audio.load();selected=null;selectedAudioSignature='';
+  if(reference&&result.sound_ids.includes(reference.id)){reference=null;syncMode();}
+  for(const soundId of result.sound_ids){waves.delete(soundId);waveZoom.delete(soundId);trimDrafts.delete(soundId);invalidateDrag(soundId);}
+  if($('#project_id').value===id){$('#project_id').value='';currentJob=null;saveDraft();}
+  $('#project-form').hidden=true;projectId='';projectJobs=[];items=[];shown=30;lastMediaSignature='';projectsSignature='';refreshSequence++;
+  try{localStorage.removeItem('fx-project')}catch{}await poll();await refreshMedia();notice('Project deleted · '+result.generated_sounds+' sounds and '+result.files+' internal files removed.');
+ }catch(error){notice(error.message,true)}finally{button.disabled=false;}
+});
 $('#cancel-project-form').addEventListener('click',()=>{$('#project-form').hidden=true});
 $('#project-form').addEventListener('submit',async event=>{
  event.preventDefault();const button=$('#save-project');button.disabled=true;
@@ -124,28 +137,53 @@ async function refreshMedia(){
  }else if(view==='favorites'){
   query.set('favorites','1');const [generated,library]=await Promise.all([api('history?'+query),api('library?'+query)]);data={items:[...generated.items,...library.items]};
  }else{if(view==='generate' && currentJob)query.set('job',currentJob);data=view==='generate'&&!currentJob&&$('#project_id').value?await api('projects/'+$('#project_id').value+'?'+query):await api('history?'+query);}
- if(request!==refreshSequence || requestedView!==view || trimDrag || savingTrims.size)return;items=data.items;
- const signature=JSON.stringify([view,shown,items,status?.export_mp3,$('#model').value]);if(signature===lastMediaSignature)return;lastMediaSignature=signature;renderMedia();
+ if(request!==refreshSequence || requestedView!==view || trimDrag || savingTrims.size)return;
+ for(const sound of data.items){const previous=items.find(item=>item.id===sound.id);if(previous&&previous.path!==sound.path){waves.delete(sound.id);trimDrafts.delete(sound.id);invalidateDrag(sound.id);if(selected===sound.id){audio.pause();selectedAudioSignature='';}if(reference?.id===sound.id){reference=sound;syncMode();}}}
+ items=data.items;
+ const signature=JSON.stringify([view,shown,items,status?.export_mp3,status?.export_ogg,$('#model').value]);if(signature===lastMediaSignature){syncRegenerationRows();return;}lastMediaSignature=signature;renderMedia();
 }
 function renderMedia(){
  $('#results-count').textContent=items.length?`${items.length} ${items.length===1?'Sound':'Sounds'}`:'';
  const visible=items.slice(0,view==='generate'?8:shown);
  const empty=view==='projects'?(projectId?['No sounds in this project yet','Generate for this project, or add existing sounds using each sound’s Projects menu.']:['Your projects live here','Create a project for your game or edit, then generate its sounds together.']):view==='library'?['No results','Try another search term or category.']:view==='favorites'?['Your favorites live here','Star a sound to find it here later.']:view==='generate' && currentJob?['Your sound will appear here','Finished variants appear here as generation completes.']:view==='generate'?['Your first sound starts with an idea','Describe a sound or choose an example above.']:['No matching sounds yet','Generate a sound or change your search term.'];
- $('#media-list').innerHTML=visible.length?visible.map(sound=>{
+ const markup=visible.length?visible.map(sound=>{
   const library=sound.kind==='library',undocumented=library && sound.license.status!=='documented_bundle';
   const meta=library?`${duration(sound.duration)} · ${categoryName(sound.category)} · ${sound.source.supplier||'Unknown source'}`:`${duration(sound.duration)} · Seed ${sound.seed} · ${new Date(sound.created*1000).toLocaleString('en-US',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`;
   const info=library?`<p>${escape(sound.source.original_filename)}<br>${escape(sound.source.collection||'Collection not documented')}<br><span class="${undocumented?'license-unknown':''}">${undocumented?'Source and usage rights are not documented.':'Sonniss bundle license documented · commercial use allowed · no attribution required.'}</span></p>${sound.license.document?'<button data-action="license">Open license document</button>':''}`:`<p>${escape(sound.prompt)}</p><p>${sound.settings.steps} sampling steps · CFG ${sound.settings.cfg}${sound.settings.negative_prompt?' · Negative prompt: '+escape(sound.settings.negative_prompt):''}${sound.settings.mode!=='text'?'<br>'+escape(sound.settings.mode==='inpaint'?'Section '+duration(sound.settings.start)+' to '+duration(sound.settings.end):'Variation')+' · Strength '+sound.settings.strength:''}${sound.reference?'<br>Reference: '+escape(sound.reference.title)+(sound.reference.kind==='library'?' · '+(sound.reference.license.status==='documented_bundle'?'Sonniss license documented':'Source and usage rights not documented'):''):''}<br>${escape(modelName(sound.settings.model))}${sound.settings.model!=='medium'?' · Model removed':''}</p><button data-action="model-license">Original model &amp; license</button>`;
   return `<article class="sound" data-id="${sound.id}"><div class="sound-heading"><div><h3 class="sound-title">${escape(sound.title)}</h3><p class="sound-meta">${escape(meta)}${sound.projects?.length?' · '+escape(sound.projects.map(p=>p.name).join(', ')):''}</p></div><button class="icon-button ${sound.favorite?'favorite':''}" data-action="favorite" aria-label="${sound.favorite?'Remove from favorites':'Add to favorites'}" aria-pressed="${Boolean(sound.favorite)}">${svg('favorites')}</button></div>
   ${sound.missing?'<p class="job-error">The file is missing from its saved location. You can generate the sound again.</p>':`<div class="player"><button class="play-button" data-action="play" aria-label="Play sound">${svg('play')}</button><div class="wave-viewport"><div class="wave"><canvas aria-hidden="true"></canvas><input class="seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Playback position" disabled><div class="trim-selection" aria-hidden="true"></div><button type="button" class="trim-handle" data-trim-edge="start" role="slider" aria-label="Trim start" aria-valuemin="0" aria-valuemax="${sound.source_duration||sound.duration}" aria-valuenow="0" title="Drag the left edge to trim the start. Arrow keys adjust by 10 ms; Shift adjusts by 1 ms." disabled></button><button type="button" class="trim-handle" data-trim-edge="end" role="slider" aria-label="Trim end" aria-valuemin="0" aria-valuemax="${sound.source_duration||sound.duration}" aria-valuenow="${sound.source_duration||sound.duration}" title="Drag the right edge to trim the end. Arrow keys adjust by 10 ms; Shift adjusts by 1 ms." disabled></button></div></div><span class="time">${playerTime(0,sound.duration)}</span></div><div class="trim-info"><span class="trim-summary">Drag the edges to trim · automatic 5 ms fades</span><button data-action="reset-trim" hidden>Reset trim</button><div class="wave-zoom" role="group" aria-label="Waveform zoom"><button data-action="zoom-out" aria-label="Zoom out waveform" title="Zoom out">−</button><span class="zoom-level">1×</span><button data-action="zoom-in" aria-label="Zoom in waveform" title="Zoom in">+</button><button data-action="zoom-fit" title="Show the complete sound">Fit</button></div><span class="trim-state" role="status"></span></div>`}
-  <div class="sound-actions"><details class="sound-projects"><summary>Projects${sound.projects?.length?' ('+sound.projects.length+')':''}</summary><div class="project-memberships">${(status?.projects||[]).map(p=>`<label><input type="checkbox" data-project-membership="${p.id}" ${sound.projects?.some(assigned=>assigned.id===p.id)?'checked':''}> ${escape(p.name)}</label>`).join('')||'<p>Create a project to organize your sounds.</p>'}<button type="button" data-action="new-project">New project</button></div></details>${library?'':'<button data-action="reuse">Generate again</button>'}${!sound.missing?`<button data-action="reference" ${sound.duration<.5||sound.duration>30?'hidden':''} ${selectedModel()?.editing===false?'disabled title="Select Stable Audio to edit a reference."':''}>Use as reference</button>`:''}<details><summary>${library?(undocumented?'Unknown source':'Source & license'):'Description & settings'}</summary>${info}</details><span class="spacer"></span>${sound.missing?'':'<button class="drag-audio" data-action="drag-audio" draggable="false" title="Preparing audio for dragging…" disabled>Drag audio</button>'}<button data-action="wav" ${sound.missing?'disabled':''}>Save WAV</button><button data-action="mp3" ${sound.missing||!status?.export_mp3?'disabled title="FFmpeg is missing; check Setup"':''}>Save MP3</button><button data-action="reveal">Show in Finder</button></div></article>`;
+  <div class="sound-actions"><details class="sound-projects"><summary>Projects${sound.projects?.length?' ('+sound.projects.length+')':''}</summary><div class="project-memberships">${(status?.projects||[]).map(p=>`<label><input type="checkbox" data-project-membership="${p.id}" ${sound.projects?.some(assigned=>assigned.id===p.id)?'checked':''}> ${escape(p.name)}</label>`).join('')||'<p>Create a project to organize your sounds.</p>'}<button type="button" data-action="new-project">New project</button></div></details>${library?'':'<button data-action="regenerate" title="Replace this sound with a new take using the same prompt and settings, with a fresh seed.">Regenerate</button><button data-action="reuse">Generate again</button>'}${!sound.missing?`<button data-action="reference" ${sound.duration<.5||sound.duration>30?'hidden':''} ${selectedModel()?.editing===false?'disabled title="Select Stable Audio to edit a reference."':''}>Use as reference</button>`:''}<details><summary>${library?(undocumented?'Unknown source':'Source & license'):'Description & settings'}</summary>${info}</details><span class="spacer"></span>${sound.missing?'':'<button class="drag-audio" data-action="drag-audio" draggable="false" title="Preparing audio for dragging…" disabled>Drag audio</button>'}<button data-action="wav" ${sound.missing?'disabled':''}>Save WAV</button><button data-action="ogg" ${sound.missing||!status?.export_ogg?'disabled title="OGG encoder is unavailable; check Setup"':'title="Smaller OGG Vorbis file · saved crop"'}>Save OGG</button><button data-action="mp3" ${sound.missing||!status?.export_mp3?'disabled title="FFmpeg is missing; check Setup"':''}>Save MP3</button><button data-action="reveal">Show in Finder</button></div>${library?'':'<div class="regeneration-status" role="status"><span></span><button data-action="cancel-regenerate" hidden>Cancel</button></div>'}</article>`;
  }).join(''):`<div class="empty"><strong>${empty[0]}</strong><p>${empty[1]}</p></div>`;
  $('#more').hidden=items.length<=visible.length || view==='generate';
- document.querySelectorAll('.sound').forEach((row,index)=>{if(row.querySelector('canvas')){updateTrimRow(row);if(index<5)loadWave(row);else observer.observe(row);}});syncPlayer();
+ // Keep unchanged rows, their player state, open menus and keyboard focus.
+ const list=$('#media-list'),template=document.createElement('template');template.innerHTML=markup;
+ if(!visible.length)list.innerHTML=markup;
+ else{
+  list.querySelector('.empty')?.remove();
+  const previous=new Map([...list.children].map(row=>[row.dataset.id,row]));
+  [...template.content.children].forEach((fresh,index)=>{
+   const sound=visible[index],signature=JSON.stringify([{...sound,regeneration:undefined},status?.projects.map(({id,name})=>({id,name})),status?.export_mp3,status?.export_ogg]);
+   let row=previous.get(sound.id);
+   if(!row){row=fresh;row.dataset.signature=signature;}
+   else if(row.dataset.signature!==signature){
+    const focus=row.contains(document.activeElement)?document.activeElement:null,action=focus?.dataset.action,edge=focus?.dataset.trimEdge;
+    const open=[...row.querySelectorAll('details')].map(detail=>detail.open);
+    row.innerHTML=fresh.innerHTML;row.dataset.signature=signature;
+    row.querySelectorAll('details').forEach((detail,i)=>{detail.open=open[i]||false});
+    if(action||edge)row.querySelector(action?`[data-action="${action}"]`:`[data-trim-edge="${edge}"]`)?.focus({preventScroll:true});
+   }
+   if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);
+   previous.delete(sound.id);
+   if(row.querySelector('canvas')){applyZoom(row);updateTrimRow(row);if(index<5||waves.has(sound.id))loadWave(row);else observer.observe(row);}
+  });
+  for(const row of previous.values()){observer.unobserve(row);row.remove();}
+ }
+ syncRegenerationRows();syncPlayer();
 }
 const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){loadWave(entry.target);observer.unobserve(entry.target)}}},{rootMargin:'100px'});
 async function loadWave(row,bins=700*(waveZoom.get(row.dataset.id)?.factor||1)){
- const id=row.dataset.id;
- try{let wave=waves.get(id);if(!wave||(wave.bins||700)<bins){wave=await api('waveform/'+id+'?bins='+bins);if((waves.get(id)?.bins||0)<wave.bins)waves.set(id,wave);else wave=waves.get(id);}
+ const id=row.dataset.id,path=items.find(item=>item.id===id)?.path;
+ try{let wave=waves.get(id);if(!wave||(wave.bins||700)<bins){wave=await api('waveform/'+id+'?bins='+bins);if(items.find(item=>item.id===id)?.path!==path)return;if((waves.get(id)?.bins||0)<wave.bins)waves.set(id,wave);else wave=waves.get(id);}
   if(!row.isConnected)return;row.querySelector('.wave input').disabled=false;row.querySelectorAll('.trim-handle').forEach(handle=>handle.disabled=false);applyZoom(row);updateTrimRow(row);drawWave(row,wave);syncPlayer();primeDrag(row);
  }catch(error){const player=row.querySelector('.player');player.insertAdjacentHTML('afterend',`<p class="job-error">Waveform unavailable: ${escape(error.message)}</p>`);}
 }
@@ -160,7 +198,7 @@ function syncPlayer(){
 }
 function sourceDuration(sound){return waves.get(sound.id)?.duration||sound.source_duration||sound.duration;}
 function trimRange(sound){return trimDrafts.get(sound.id)||sound.trim||{start:0,end:sourceDuration(sound)};}
-function audioSignature(sound){return sound.id+'|'+(sound.trim?.updated||'original');}
+function audioSignature(sound){return sound.id+'|'+sound.path+'|'+(sound.trim?.updated||'original');}
 function rowFor(id){return document.querySelector(`.sound[data-id="${id}"]`);}
 function applyZoom(row){
  const viewport=row.querySelector('.wave-viewport');if(!viewport)return;
@@ -195,7 +233,7 @@ function updateTrimRow(row){
  }
  row.querySelector('.trim-summary').textContent=edited?`${trim.start.toFixed(3)}–${trim.end.toFixed(3)} s · ${(trim.end-trim.start).toFixed(3)} s selected · 5 ms fades`:'Drag the edges to trim · automatic 5 ms fades';
  row.querySelector('[data-action="reset-trim"]').hidden=!edited;row.querySelector('.trim-state').textContent=savingTrims.has(sound.id)?'Saving…':'';
- for(const action of ['play','wav','mp3','drag-audio']){const button=row.querySelector(`[data-action="${action}"]`);if(button)button.disabled=busy||(action==='mp3'&&!status?.export_mp3)||(action==='drag-audio'&&!button.dataset.dragTicket);}
+ for(const action of ['play','wav','ogg','mp3','drag-audio']){const button=row.querySelector(`[data-action="${action}"]`);if(button)button.disabled=busy||(action==='mp3'&&!status?.export_mp3)||(action==='ogg'&&!status?.export_ogg)||(action==='drag-audio'&&!button.dataset.dragTicket);}
  const referenceButton=row.querySelector('[data-action="reference"]');if(referenceButton)referenceButton.hidden=trim.end-trim.start<.5||trim.end-trim.start>30;
  if(waves.has(sound.id))drawWave(row,waves.get(sound.id));
 }
@@ -236,7 +274,7 @@ async function persistTrim(id){
   const row=rowFor(id),sound=items.find(item=>item.id===id);
   if(row){updateTrimRow(row);const meta=row.querySelector('.sound-meta');if(sound&&meta){const separator=meta.textContent.indexOf(' ·');if(separator>=0)meta.textContent=duration(sound.duration)+meta.textContent.slice(separator);}primeDrag(row);}
   // Keep keyboard focus and handle positions; avoid rebuilding a row just saved in place.
-  lastMediaSignature=JSON.stringify([view,shown,items,status?.export_mp3,$('#model').value]);syncPlayer();
+  lastMediaSignature=JSON.stringify([view,shown,items,status?.export_mp3,status?.export_ogg,$('#model').value]);syncPlayer();
  }
 }
 $('#media-list').addEventListener('pointerdown',event=>{
@@ -281,6 +319,13 @@ $('#media-list').addEventListener('click',async event=>{
   if(action==='play')await play(sound.id);
   else if(action==='favorite'){await api('favorite/'+sound.id,{favorite:!sound.favorite});await refreshMedia();}
   else if(action==='new-project'){showView('projects');openProjectForm(false);}
+  else if(action==='regenerate'){
+   if(savingTrims.has(sound.id)||trimDrag?.id===sound.id)return;
+   row.dataset.regenerationFocus=String(document.activeElement===button);button.disabled=true;button.textContent='Regenerating…';
+   try{const job=await api('regenerate/'+sound.id,{});sound.regeneration={id:job.id,state:'queued',created:Date.now()/1000,message:'Queued',error:''};syncRegenerationRows();await refreshMedia();}
+   catch(error){button.disabled=false;button.textContent='Regenerate';throw error;}
+  }
+  else if(action==='cancel-regenerate'){button.disabled=true;await api('cancel/'+sound.regeneration.id,{});await refreshMedia();}
   else if(action==='reuse')await reuse(sound.settings);
   else if(action==='reference'){reference=sound;if($('#mode').value==='text')$('#mode').value='variation';showView('generate');syncMode();saveDraft();}
   else if(action==='reveal')await window.fxDesktop.reveal(sound.id);
@@ -289,18 +334,32 @@ $('#media-list').addEventListener('click',async event=>{
   else if(action==='reset-trim'){pauseForTrim(sound.id);trimDrafts.set(sound.id,{start:0,end:sourceDuration(sound)});await persistTrim(sound.id);}
   else if(action.startsWith('zoom-'))changeZoom(row,action==='zoom-fit'?1:(waveZoom.get(sound.id)?.factor||1)*(action==='zoom-in'?2:.5));
   else if(action==='drag-audio'&&!button.dataset.dragTicket)await primeDrag(row);
-  else if(['wav','mp3'].includes(action)){button.disabled=true;const result=await window.fxDesktop.exportAudio(sound.id,action,sound.title);if(!result.cancelled)notice('Sound saved: '+result.path);}
- }catch(error){notice(error.message,true)}finally{if(button.isConnected&&['wav','mp3'].includes(action)){button.disabled=false;updateTrimRow(row);}}
+  else if(['wav','ogg','mp3'].includes(action)){button.disabled=true;const result=await window.fxDesktop.exportAudio(sound.id,action,sound.title);if(!result.cancelled)notice('Sound saved: '+result.path);}
+ }catch(error){notice(error.message,true)}finally{if(button.isConnected&&['wav','ogg','mp3'].includes(action)){button.disabled=false;updateTrimRow(row);}}
 });
 async function reuse(saved){
  const changed=saved.model!=='medium',settings=normalizeModelSettings(saved);
- showView('generate');for(const key of baseFields)$('#'+key).value=settings[key]??'';
+ showView('generate');for(const key of baseFields)$('#'+key).value=settings[key]??(key==='format'?'ogg':'');
  for(const key of editingFields)if(settings[key]!==undefined)$('#'+key).value=settings[key];
  $('#mode').value=settings.mode||'text';reference=null;
  if(settings.reference_id)reference=await api('item/'+settings.reference_id);
- syncModelControls(false);renderModelState();saveDraft();$('#prompt').focus();
+ syncModelControls(false);renderModelState();await rememberFormat();saveDraft();$('#prompt').focus();
  notice(changed?'The original model was removed. Medium is selected with 8 steps and CFG 1. Your prompt, seed and duration are restored.':'Settings restored. Start the job with “'+$('#generate-button').textContent+'”.');
 }
+function formatAvailable(format){return format==='wav'||format==='ogg'&&status?.export_ogg||format==='mp3'&&status?.export_mp3;}
+function syncFormat(){
+ for(const option of $('#format').options)option.disabled=Boolean(status)&&!formatAvailable(option.value);
+ const format=$('#format').value;
+ $('#format-hint').textContent=status&&!formatAvailable(format)?'The '+format.toUpperCase()+' encoder is unavailable. Choose WAV or reinstall FX Studio.':{ogg:'Smaller OGG files. Also used by agents unless they specify a format.',wav:'Lossless WAV files, with larger file sizes. Also used by agents unless they specify a format.',mp3:'Compressed MP3 files at 320 kbps. Also used by agents unless they specify a format.'}[format];
+ updateGenerateButton();
+}
+async function rememberFormat(){
+ formatSaving=true;$('#format').disabled=true;updateGenerateButton();
+ try{const result=await api('generation-format',{format:$('#format').value});if(status)status.generation_format=result.generation_format;}
+ catch(error){$('#format').value=status?.generation_format||'ogg';notice('Format could not be saved. '+error.message,true);}
+ finally{formatSaving=false;$('#format').disabled=false;saveDraft();syncFormat();}
+}
+$('#format').addEventListener('change',rememberFormat);
 function syncForm(){$('#character-count').textContent=`${$('#prompt').value.length.toLocaleString('en-US')} / 2,000`;$('#negative_prompt').disabled=selectedModel()?.negative_prompt===false||Number($('#cfg').value)===1;}
 $('#prompt').addEventListener('input',syncForm);$('#cfg').addEventListener('input',syncForm);
 $('#generate-form').addEventListener('submit',async event=>{
@@ -312,7 +371,7 @@ document.addEventListener('click',event=>{const button=event.target.closest('[da
 $('#search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{shown=30;refreshMedia().catch(error=>notice(error.message,true))},180)});
 $('#category').addEventListener('change',()=>{shown=30;refreshMedia().catch(error=>notice(error.message,true))});$('#more').addEventListener('click',()=>{shown+=30;renderMedia()});
 function renderQueue(){
- if(!status)return;const jobs=(view==='projects'?projectJobs:status.jobs).filter(job=>['queued','running','cancelling'].includes(job.state) || (job.state==='cancelled' && job.id===currentJob) || ['failed','interrupted'].includes(job.state) && Date.now()/1000-job.created<3600);
+ if(!status)return;const jobs=(view==='projects'?projectJobs:status.jobs).filter(job=>!job.settings.replace_id).filter(job=>['queued','running','cancelling'].includes(job.state) || (job.state==='cancelled' && job.id===currentJob) || ['failed','interrupted'].includes(job.state) && Date.now()/1000-job.created<3600);
  const signature=JSON.stringify([view,jobs,status.projects]);if(signature===lastQueueSignature)return;lastQueueSignature=signature;$('#queue-section').hidden=!jobs.length||!['generate','projects'].includes(view);
  const labels={queued:'Queued',running:'Generating',cancelling:'Cancelling',cancelled:'Cancelled',failed:'Failed',interrupted:'Interrupted'};
  $('#queue').innerHTML=jobs.slice().reverse().map(job=>{
@@ -322,6 +381,17 @@ function renderQueue(){
  $('#queue').querySelectorAll('[data-progress]').forEach(span=>{span.style.width=span.dataset.progress+'%'});
 }
 $('#queue').addEventListener('click',async event=>{const button=event.target.closest('[data-job-action]');if(!button)return;const job=(view==='projects'?projectJobs:status.jobs).find(job=>job.id===button.closest('.job').dataset.job);try{if(button.dataset.jobAction==='cancel'){button.disabled=true;await api('cancel/'+job.id,{});await poll()}else await reuse(job.settings);}catch(error){notice(error.message,true)}});
+function syncRegenerationRows(){
+ for(const row of document.querySelectorAll('.sound')){
+  const sound=items.find(item=>item.id===row.dataset.id),button=row.querySelector('[data-action="regenerate"]'),box=row.querySelector('.regeneration-status');if(!sound||!button||!box)continue;
+  const job=sound.regeneration,active=job&&['queued','running','cancelling'].includes(job.state),cancel=box.querySelector('button');
+  button.disabled=Boolean(active||savingTrims.has(sound.id)||trimDrag?.id===sound.id);button.textContent=active?'Regenerating…':'Regenerate';button.setAttribute('aria-busy',String(Boolean(active)));
+  if(!active&&row.dataset.regenerationFocus==='true'){if(document.activeElement===document.body)button.focus({preventScroll:true});delete row.dataset.regenerationFocus;}
+  cancel.hidden=!active;cancel.disabled=job?.state==='cancelling';
+  const label=job?.state==='queued'?'Queued · previous take is still available':job?.state==='running'?`${job.message} · ${duration(Date.now()/1000-(job.started||job.created))}`:job?.state==='cancelling'?'Stopping…':job?.state==='completed'?'New take ready · press Play':job?.state==='cancelled'?'Cancelled · previous take kept':job?`${job.error||'Generation interrupted'} · previous take kept`:'';
+  box.querySelector('span').textContent=label;box.classList.toggle('error',Boolean(job&&['failed','interrupted'].includes(job.state)));
+ }
+}
 function renderSetup(){
  if(!status)return;
  const downloading=['running','cancelling'].includes(status.setup.state);
@@ -329,7 +399,7 @@ function renderSetup(){
  const models=status.models.map(model=>`<section class="setup-section"><h2>${escape(model.model)}</h2><p>${model.ready?'The required model files and runtime are installed.':'Setup is incomplete.'} ${escape(model.engine)}.</p>${model.missing.length?`<p>Missing files: ${escape(model.missing.join(', '))}</p>`:''}${model.dependencies.length||model.runtime_ready===false?`<p>${repair}</p>`:''}${!model.ready&&!model.dependencies.length&&model.runtime_ready!==false?`<button data-download-model="${model.id}" class="primary" ${downloading?'disabled':''}>${downloading?'Downloading weights …':model.setup.state==='paused'?'Resume download':model.setup.state==='failed'?'Retry download':'Install '+escape(model.model)}</button><p>About ${model.download_gib.toLocaleString('en-US')} GiB remaining. Existing files are reused.</p>`:''}<p>${escape(model.setup.message)}</p><button data-link="${escape(model.model_url)}">Model card</button></section>`).join('');
  const agents=status.agents;
  const agentSection=`<section class="setup-section"><h2>Local agents</h2><p>${agents.enabled?'Agent access is on.':'Agent access is off.'} Create sounds and asset packs from a local agent. Jobs appear here and use the same model and queue.</p><button data-agent-action="${agents.enabled?'disable':'enable'}" class="${agents.enabled?'':'primary'}">${agents.enabled?'Disable agent access':'Enable agent access'}</button><button data-agent-action="install-skill">Install skill…</button><button data-agent-action="save-kit">Save agent kit…</button><p>Install the English skill in your agent’s skills folder, then start a new conversation. The skill works through MCP or the app’s bundled command-line tools.</p><dl><dt>Agent export folder</dt><dd>${escape(agents.export_root)}</dd><dt>Connection</dt><dd>MCP · standard input/output · local only</dd></dl><button data-agent-action="export-folder">Choose export folder…</button><button data-agent-action="copy-config">Copy MCP config</button><button data-agent-action="copy-codex">Copy Codex config</button><details><summary>Local HTTP API</summary><p>${escape(agents.api_url)} · Authorization: Bearer &lt;local key&gt;. The skill and MCP client read the private key automatically. No key is included in the agent kit.</p><button data-agent-action="copy-key">Copy API key</button><button data-agent-action="rotate-key">Reset API key</button><p>Resetting the key invalidates copied keys. MCP and the skill read the new key on their next call.</p></details></section>`;
- $('#setup').innerHTML=models+agentSection+`<section class="setup-section"><h2>Storage & export</h2><p>Only one model is loaded for generation. The current process exits before the next model loads. Model weights stay on disk.</p><dl><dt>Sounds and history</dt><dd>${escape(status.data_dir)}</dd><dt>Model weights</dt><dd>Shared Hugging Face cache; ${status.packaged?'links are stored in the FX Studio data folder listed above.':'the app links to it from its runtime folder.'}</dd><dt>Free disk space</dt><dd>${status.free_gb.toLocaleString('en-US')} GiB</dd><dt>MP3 export</dt><dd>${status.export_mp3?(status.packaged?'FFmpeg bundled · 320 kbit/s':'FFmpeg installed · 320 kbit/s'):(status.packaged?'The bundled exporter is missing. Reinstall FX Studio. WAV export is available.':'FFmpeg is missing. WAV export is available. Install FFmpeg and restart the app.')}</dd><dt>Sound library</dt><dd>${status.library_count} sounds · read-only access${status.library_error?'<br>'+escape(status.library_error):''}</dd></dl></section><section class="setup-section"><h2>Models & licenses</h2><p>FX Studio is open source under the MIT license.</p><button data-open-bundled-licenses>Open bundled licenses</button><p>Powered by Stability AI</p><p>Stable Audio weights use the Stable Audio Community License. T5Gemma uses the Gemma terms. The official model runtimes use the MIT license. Commercial use is subject to the model license registration and revenue limits. The app does not accept agreements on your behalf.</p><button data-link="https://stability.ai/license">Stability license</button><button data-link="https://ai.google.dev/gemma/terms">Gemma terms</button><button data-link="https://github.com/Stability-AI/stable-audio-3">Official runtime</button><p>Generation and playback run locally. Medium downloads automatically on first launch when missing. Downloads and opened source links need the internet. You can pause or resume the download.</p></section>`;
+ $('#setup').innerHTML=models+agentSection+`<section class="setup-section"><h2>Storage & export</h2><p>Only one model is loaded for generation. The current process exits before the next model loads. Model weights stay on disk.</p><dl><dt>Sounds and history</dt><dd>${escape(status.data_dir)}</dd><dt>Model weights</dt><dd>Shared Hugging Face cache; ${status.packaged?'links are stored in the FX Studio data folder listed above.':'the app links to it from its runtime folder.'}</dd><dt>Free disk space</dt><dd>${status.free_gb.toLocaleString('en-US')} GiB</dd><dt>Sound format</dt><dd>${status.export_ogg?'Choose OGG (quality 5), lossless WAV or MP3 (320 kbps) in Generate → Format. OGG is the initial default.':'The OGG encoder is unavailable. Choose lossless WAV in Generate → Format or reinstall FX Studio.'}</dd><dt>MP3 export</dt><dd>${status.export_mp3?(status.packaged?'FFmpeg bundled · 320 kbit/s':'FFmpeg installed · 320 kbit/s'):(status.packaged?'The bundled exporter is missing. Reinstall FX Studio. WAV export is available.':'FFmpeg is missing. WAV export is available. Install FFmpeg and restart the app.')}</dd><dt>Sound library</dt><dd>${status.library_count} sounds · read-only access${status.library_error?'<br>'+escape(status.library_error):''}</dd></dl></section><section class="setup-section"><h2>Models & licenses</h2><p>FX Studio is open source under the MIT license.</p><button data-open-bundled-licenses>Open bundled licenses</button><p>Powered by Stability AI</p><p>Stable Audio weights use the Stable Audio Community License. T5Gemma uses the Gemma terms. The official model runtimes use the MIT license. Commercial use is subject to the model license registration and revenue limits. The app does not accept agreements on your behalf.</p><button data-link="https://stability.ai/license">Stability license</button><button data-link="https://ai.google.dev/gemma/terms">Gemma terms</button><button data-link="https://github.com/Stability-AI/stable-audio-3">Official runtime</button><p>Generation and playback run locally. Medium downloads automatically on first launch when missing. Downloads and opened source links need the internet. You can pause or resume the download.</p></section>`;
 }
 $('#setup').addEventListener('click',async event=>{const button=event.target.closest('button');if(!button)return;try{if(button.dataset.agentAction){button.disabled=true;const result=await window.fxDesktop.agentAction(button.dataset.agentAction);if(result.copied)notice('Copied to clipboard');else if(result.path)notice('Saved to '+result.path);if(!result.cancelled){await poll();renderSetup()}else button.disabled=false;}else if(button.hasAttribute('data-open-bundled-licenses'))await window.fxDesktop.openBundledLicenses();else if(button.dataset.link)await window.fxDesktop.openLink(button.dataset.link);else if(button.dataset.downloadModel){button.disabled=true;await api('setup',{model:button.dataset.downloadModel});await poll();renderSetup()}}catch(error){button.disabled=false;notice(error.message,true)}});
 $('.profile-links').addEventListener('click',async event=>{const button=event.target.closest('button[data-link]');if(!button)return;try{await window.fxDesktop.openLink(button.dataset.link)}catch(error){notice(error.message,true)}});
@@ -387,9 +457,9 @@ function syncModelControls(resetDefaults){
 $('#model').addEventListener('change',()=>{syncModelControls(true);renderModelState();saveDraft()});
 let setupSignature='';
 async function poll(){
- status=await api('status');syncProjects();renderModelState();renderDownload();renderQueue();
+ status=await api('status');if(!formatInitialized){$('#format').value=status.generation_format||'ogg';formatInitialized=true;}syncFormat();syncProjects();renderModelState();renderDownload();renderQueue();
  $('.local-label').textContent=status.platform==='win32'?'Local on your PC':'Local on your Mac';
- if(view==='setup'){const signature=JSON.stringify([status.models,status.setup,status.free_gb,status.export_mp3,status.agents?.enabled,status.agents?.export_root]);if(signature!==setupSignature){setupSignature=signature;renderSetup();}}
+ if(view==='setup'){const signature=JSON.stringify([status.models,status.setup,status.free_gb,status.export_mp3,status.export_ogg,status.agents?.enabled,status.agents?.export_root]);if(signature!==setupSignature){setupSignature=signature;renderSetup();}}
  if(view!=='setup')await refreshMedia();
 }
 async function heartbeat(){try{await poll()}catch(error){$('#model-badge').textContent='Service unavailable';$('#model-badge').classList.add('problem');$('#generate-button').disabled=true;notice('The local service is unavailable. Restart FX Studio. '+error.message,true)}finally{setTimeout(heartbeat,1000)}}
@@ -411,7 +481,7 @@ try{
 }catch{}
 
 
-function updateGenerateButton(){const editing=$('#mode').value!=='text';$('#generate-button').disabled=!selectedModel()?.ready||['running','cancelling'].includes(status?.setup.state)||editing&&!reference;$('#generate-button').textContent={text:'Generate sound',variation:'Generate variation',inpaint:'Edit section'}[$('#mode').value];}
+function updateGenerateButton(){const editing=$('#mode').value!=='text';$('#generate-button').disabled=formatSaving||!formatInitialized||!formatAvailable($('#format').value)||!selectedModel()?.ready||['running','cancelling'].includes(status?.setup.state)||editing&&!reference;$('#generate-button').textContent={text:'Generate sound',variation:'Generate variation',inpaint:'Edit section'}[$('#mode').value];}
 function syncMode(){
  const mode=$('#mode').value,editing=mode!=='text';$('#reference-panel').hidden=!editing;$('#inpaint-fields').hidden=mode!=='inpaint';$('#inpaint-note').hidden=mode!=='inpaint';$('#seconds').readOnly=editing;
  for(const key of ['strength','start','end'])$('#'+key).disabled=!editing||(key!=='strength'&&mode!=='inpaint');

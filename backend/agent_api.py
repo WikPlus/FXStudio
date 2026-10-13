@@ -97,12 +97,15 @@ class AgentAPI:
             if any(a.get('project_id') not in (None, '', project_id) for a in assets):
                 raise ValueError('All assets must use the pack project_id.')
             assets = [{**asset, 'project_id': project_id} for asset in assets]
-        with self.studio.lock:
+        with self.studio.render_lock, self.studio.lock:
             previous = self.studio.rows('SELECT * FROM agent_requests WHERE id=?', (request_id,))
             if previous:
                 if previous[0]['fingerprint'] != fingerprint:
                     raise Conflict('This request_id was already used with different settings. Use a new id for a new request.')
-                return json.loads(previous[0]['result'])
+                result = json.loads(previous[0]['result'])
+                if result.get('deleted'):
+                    raise Conflict(result['message'])
+                return result
             result = {}
             def persist(jobs):
                 if pack:
@@ -136,8 +139,8 @@ class AgentAPI:
         return target
 
     def write_sound(self, sound_id, folder, name, format):
-        if format not in ('wav', 'mp3'):
-            raise ValueError('Choose wav or mp3.')
+        if format not in ('wav', 'mp3', 'ogg'):
+            raise ValueError('Choose wav, ogg or mp3.')
         name = self.name(name)
         item = self.sound(sound_id)
         if not item['audio_path']:
@@ -168,15 +171,15 @@ class AgentAPI:
         item = self.studio.item(data['sound_id'])
         name = data.get('name') or item.get('settings', {}).get('asset_name') or ('sound_' + item['id'])
         with self.studio.render_lock:
-            return self.write_sound(item['id'], self.export_directory(data.get('folder', '')), name, data.get('format', 'wav'))
+            return self.write_sound(item['id'], self.export_directory(data.get('folder', '')), name, data.get('format', 'ogg'))
 
     def export_pack(self, data):
         pack = self.pack(data['pack_id'])
         if pack['state'] != 'completed':
             raise ValueError('This pack is not complete. Read its jobs and errors; export individual finished sounds if needed.')
-        format = data.get('format', 'wav')
-        if format not in ('wav', 'mp3'):
-            raise ValueError('Choose wav or mp3.')
+        format = data.get('format', 'ogg')
+        if format not in ('wav', 'mp3', 'ogg'):
+            raise ValueError('Choose wav, ogg or mp3.')
         folder = self.export_directory(data.get('folder', '')) / (pack['name'] + '_' + pack['id'])
         # A pack gets its own new directory; failed exports remove only that directory.
         folder.mkdir()
@@ -207,6 +210,8 @@ class AgentAPI:
             return {'guide': (ROOT / 'ui/skills/fx-studio/SKILL.md').read_text(encoding='utf-8')}
         if path == '/projects':
             return {'projects': self.studio.projects(value('q'))}
+        if path == '/project-deletion':
+            return self.studio.project_deletion(value('project_id'))
         if path.startswith('/projects/'):
             project_id = path.rsplit('/', 1)[-1]
             offset, limit = int(value('offset', '0')), int(value('limit', '30'))
@@ -237,6 +242,8 @@ class AgentAPI:
             return self.studio.create_project(data)
         if path == '/project-update':
             return self.studio.update_project(data['project_id'], data)
+        if path == '/project-delete':
+            return self.studio.delete_project(data['project_id'], data)
         if path == '/project-sound':
             return self.studio.set_project_sound(data['project_id'], data['sound_id'], data.get('included', True))
         if path == '/generate':

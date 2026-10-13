@@ -24,6 +24,7 @@ client = MCPClient()
 READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
 RETRY = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
+DELETE = ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False)
 
 
 @server.tool(annotations=READ, structured_output=True)
@@ -51,12 +52,13 @@ def generate_sound(request_id: str, prompt: str, asset_name: str = 'sound', seco
                    variants: int = 1, steps: int = 8, cfg: float = 1, seed: int | None = None,
                    negative_prompt: str = '', mode: str = 'text', reference_id: str | None = None,
                    strength: float = .65, start: float = 0, end: float | None = None,
-                   project_id: str | None = None) -> dict[str, Any]:
+                   project_id: str | None = None, format: str | None = None) -> dict[str, Any]:
     """Queue one asset and return its job id immediately. Duration .5–30s, variants 1–4, steps 1–16, CFG 0–10.
     Supply a unique request_id; reuse the same id/settings after a transport error to avoid duplicate jobs.
     mode text, variation or inpaint; reference modes require reference_id and the reference duration.
     Negative prompt has no effect at CFG 1. Inspect errors before retrying; poll get_job until completed.
     Pass project_id returned by list_projects/create_project to file every variant in that project.
+    format ogg/wav/mp3 selects storage (WAV lossless, OGG quality 5, MP3 320 kbps). Omit to use the app's Format selection.
     """
     settings = dict(prompt=prompt, asset_name=asset_name, seconds=seconds, variants=variants, steps=steps,
                     cfg=cfg, seed=seed, negative_prompt=negative_prompt, mode=mode)
@@ -64,6 +66,8 @@ def generate_sound(request_id: str, prompt: str, asset_name: str = 'sound', seco
         settings.update(reference_id=reference_id, strength=strength, start=start, end=seconds if end is None else end)
     if project_id is not None:
         settings['project_id'] = project_id
+    if format is not None:
+        settings['format'] = format
     return client.request('/generate', {'request_id': request_id, 'settings': settings})
 
 
@@ -71,7 +75,8 @@ def generate_sound(request_id: str, prompt: str, asset_name: str = 'sound', seco
 def create_sound_pack(request_id: str, name: str, assets: list[dict[str, Any]], project_id: str | None = None) -> dict[str, Any]:
     """Atomically queue 1–8 separate assets. Each needs a distinct asset_name and English prompt.
     Optional per-asset fields: seconds, variants, steps, cfg, seed, negative_prompt, mode, reference_id,
-    strength, start, end. Names use letters/numbers/underscores/hyphens. Reuse request_id after transport errors.
+    strength, start, end, format (ogg/wav/mp3; omitted uses the app's Format selection).
+    Names use letters/numbers/underscores/hyphens. Reuse request_id after transport errors.
     Returns pack and job ids immediately. Poll get_pack; larger packs need batches after jobs finish.
     Pass project_id to group every asset/variant in the same persistent project for desktop review.
     """
@@ -129,6 +134,23 @@ def get_job(job_id: str) -> dict[str, Any]:
 
 
 @server.tool(annotations=READ, structured_output=True)
+def preview_project_deletion(project_id: str) -> dict[str, Any]:
+    """Preview permanent project deletion: exclusive sounds, internal files/bytes and active blockers.
+    Shared sounds, external exports and the read-only library are preserved. Returns a revision for confirmation.
+    """
+    return client.request(client.query('/project-deletion', project_id=project_id))
+
+
+@server.tool(annotations=DELETE, structured_output=True)
+def delete_project(project_id: str, confirm_name: str, revision: str = '') -> dict[str, Any]:
+    """Permanently delete a project and its exclusive generated sounds, previous takes, crops, drag files and logs.
+    Only use after the user explicitly asks to delete this project. Preview first and pass its exact name and revision.
+    Finish/cancel affected jobs first. Shared sounds, the library and external exported files survive.
+    """
+    return client.request('/project-delete', dict(project_id=project_id, confirm_name=confirm_name, revision=revision))
+
+
+@server.tool(annotations=READ, structured_output=True)
 def get_pack(pack_id: str) -> dict[str, Any]:
     """Get all pack jobs, progress/errors and completed sounds. Partial or failed packs are marked incomplete."""
     return client.request('/packs/' + pack_id)
@@ -180,16 +202,16 @@ def set_favorite(sound_id: str, favorite: bool = True) -> dict[str, Any]:
 
 
 @server.tool(annotations=WRITE, structured_output=True)
-def export_sound(sound_id: str, name: str = '', format: str = 'wav', folder: str = '') -> dict[str, Any]:
-    """Export the saved crop as WAV or MP3 inside the folder selected in Setup. folder is relative.
+def export_sound(sound_id: str, name: str = '', format: str = 'ogg', folder: str = '') -> dict[str, Any]:
+    """Export the saved crop as OGG Vorbis by default, or WAV/MP3 (format: ogg/wav/mp3), inside the folder selected in Setup. folder is relative.
     name uses letters/numbers/underscores/hyphens. Existing files are preserved; returns actual path and provenance.
     """
     return client.request('/export', dict(sound_id=sound_id, name=name, format=format, folder=folder))
 
 
 @server.tool(annotations=WRITE, structured_output=True)
-def export_pack(pack_id: str, format: str = 'wav', folder: str = '') -> dict[str, Any]:
-    """Export a completed pack's saved crops and a JSON manifest of prompts/settings/seeds/licenses.
+def export_pack(pack_id: str, format: str = 'ogg', folder: str = '') -> dict[str, Any]:
+    """Export a completed pack's saved crops as wav/ogg/mp3 and a JSON manifest of prompts/settings/seeds/licenses.
     Writes a new pack directory inside the configured export folder; existing exports are preserved.
     """
     return client.request('/export-pack', dict(pack_id=pack_id, format=format, folder=folder))
